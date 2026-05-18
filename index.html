@@ -96,14 +96,20 @@
   .player.locked:hover{background:var(--panel2)}
   .skipped{color:var(--muted);font-style:italic}
   .pcard{max-width:480px}
-  .pcard .photo{width:100%;height:clamp(160px, 35vh, 280px);background:#0f1320;
-    border-radius:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
-    color:var(--muted);font-size:14px;overflow:hidden}
-  .pcard .photo img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  .pcard .photo{width:100%;background:#0f1320;border-radius:10px;margin-bottom:10px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:14px;overflow:hidden;min-height:80px}
+  .pcard .photo img{width:auto;max-width:100%;max-height:clamp(160px, 28vh, 220px);
+    object-fit:contain;display:block}
   .pcard .pname{font-size:20px;font-weight:700;margin:0 0 2px}
   .pcard .pmeta{font-size:12px;color:var(--muted);margin-bottom:10px}
-  .pcard .bio{font-size:13.5px;line-height:1.45;max-height:200px;overflow:auto;
+  .pcard .bio{font-size:13.5px;line-height:1.45;
     background:var(--panel2);padding:10px;border-radius:10px;border:1px solid var(--line)}
+  .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:8px;text-align:center}
+  .stat .v{font-size:16px;font-weight:700;color:var(--text)}
+  .stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
   .pcard .row{margin-top:10px;justify-content:flex-end}
   .confirm-q{font-size:16px;margin:6px 0 12px}
   .confirm-q b{color:var(--accent)}
@@ -765,6 +771,117 @@ const FUN_FACTS = {
   "Bill Walton": "Was a hardcore Deadhead and attended over 850 Grateful Dead concerts.",
   "DeMar DeRozan": "Helped destigmatize mental health in the NBA by openly talking about his depression.",
 };
+// Career stats: [seasons, PPG, RPG, APG, SPG, BPG]. null for steals/blocks pre-1973-74.
+// Curated through 2024-25 season end / current 2025-26 for actives.
+const STATS = {
+  "Michael Jordan":           [15, 30.1, 6.2, 5.3, 2.3, 0.8],
+  "LeBron James":             [22, 27.0, 7.5, 7.4, 1.5, 0.7],
+  "Kareem Abdul-Jabbar":      [20, 24.6, 11.2, 3.6, 0.9, 2.6],
+  "Magic Johnson":            [13, 19.5, 7.2, 11.2, 1.9, 0.4],
+  "Larry Bird":               [13, 24.3, 10.0, 6.3, 1.7, 0.8],
+  "Bill Russell":             [13, 15.1, 22.5, 4.3, null, null],
+  "Wilt Chamberlain":         [14, 30.1, 22.9, 4.4, null, null],
+  "Shaquille O'Neal":         [19, 23.7, 10.9, 2.5, 0.6, 2.3],
+  "Tim Duncan":               [19, 19.0, 10.8, 3.0, 0.7, 2.2],
+  "Kobe Bryant":              [20, 25.0, 5.2, 4.7, 1.4, 0.5],
+  "Hakeem Olajuwon":          [18, 21.8, 11.1, 2.5, 1.7, 3.1],
+  "Stephen Curry":            [16, 24.8, 4.7, 6.4, 1.6, 0.2],
+  "Kevin Durant":             [17, 27.3, 7.0, 4.4, 1.1, 1.1],
+  "Jerry West":               [14, 27.0, 5.8, 6.7, null, null],
+  "Oscar Robertson":          [14, 25.7, 7.5, 9.5, null, null],
+  "Karl Malone":              [19, 25.0, 10.1, 3.6, 1.4, 0.8],
+  "Moses Malone":             [19, 20.6, 12.2, 1.4, 0.8, 1.3],
+  "Julius Erving":            [16, 24.2, 8.5, 4.2, 1.9, 1.5],
+  "David Robinson":           [14, 21.1, 10.6, 2.5, 1.4, 3.0],
+  "Dirk Nowitzki":            [21, 20.7, 7.5, 2.4, 0.8, 0.8],
+  "Kevin Garnett":            [21, 17.8, 10.0, 3.7, 1.3, 1.4],
+  "Giannis Antetokounmpo":    [13, 23.7, 9.6, 4.8, 1.1, 1.3],
+  "Nikola Jokic":             [11, 21.5, 10.8, 6.7, 1.3, 0.7],
+  "Charles Barkley":          [16, 22.1, 11.7, 3.9, 1.5, 0.8],
+  "John Stockton":            [19, 13.1, 2.7, 10.5, 2.2, 0.2],
+  "Isiah Thomas":             [13, 19.2, 3.6, 9.3, 1.9, 0.3],
+  "Scottie Pippen":           [17, 16.1, 6.4, 5.2, 2.0, 0.8],
+  "Dwyane Wade":              [16, 22.0, 4.7, 5.4, 1.5, 0.8],
+  "Allen Iverson":            [14, 26.7, 3.7, 6.2, 2.2, 0.2],
+  "Steve Nash":               [18, 14.3, 3.0, 8.5, 0.7, 0.1],
+  "Patrick Ewing":            [17, 21.0, 9.8, 1.9, 1.0, 2.4],
+  "Jason Kidd":               [19, 12.6, 6.3, 8.7, 1.9, 0.3],
+  "Gary Payton":              [17, 16.3, 3.9, 6.7, 1.8, 0.2],
+  "Chris Paul":               [20, 17.3, 4.5, 9.4, 2.1, 0.1],
+  "James Harden":             [16, 24.4, 5.6, 7.2, 1.5, 0.5],
+  "Russell Westbrook":        [17, 21.0, 7.0, 8.2, 1.6, 0.3],
+  "Dwight Howard":            [18, 15.7, 11.8, 1.3, 0.9, 1.8],
+  "Paul Pierce":              [19, 19.7, 5.6, 3.5, 1.3, 0.6],
+  "Ray Allen":                [18, 18.9, 4.1, 3.4, 1.1, 0.2],
+  "Reggie Miller":            [18, 18.2, 3.0, 3.0, 1.1, 0.3],
+  "Clyde Drexler":            [15, 20.4, 6.1, 5.6, 2.0, 0.7],
+  "John Havlicek":            [16, 20.8, 6.3, 4.8, null, null],
+  "Joel Embiid":              [11, 27.3, 11.0, 3.6, 1.0, 1.7],
+  "Anthony Davis":            [13, 24.0, 10.5, 2.5, 1.3, 2.3],
+  "Damian Lillard":           [13, 25.2, 4.3, 6.7, 0.9, 0.3],
+  "Kawhi Leonard":            [14, 20.0, 6.4, 3.1, 1.8, 0.6],
+  "Paul George":              [15, 20.5, 6.3, 3.7, 1.8, 0.4],
+  "Jimmy Butler":             [14, 18.0, 5.4, 4.2, 1.6, 0.4],
+  "Luka Doncic":              [7, 28.6, 8.6, 8.2, 1.2, 0.5],
+  "Jayson Tatum":             [8, 23.7, 7.4, 3.8, 1.0, 0.6],
+  "Devin Booker":             [10, 24.3, 4.3, 4.7, 0.9, 0.4],
+  "Donovan Mitchell":         [8, 24.4, 4.3, 4.7, 1.4, 0.3],
+  "Klay Thompson":            [14, 19.0, 3.5, 2.3, 0.8, 0.5],
+  "Draymond Green":           [13, 8.7, 7.0, 5.7, 1.4, 1.0],
+  "Bradley Beal":             [13, 21.4, 4.3, 4.6, 1.0, 0.4],
+  "Kyrie Irving":             [14, 23.1, 3.9, 5.7, 1.2, 0.4],
+  "Shai Gilgeous-Alexander":  [7, 24.5, 5.0, 5.5, 1.7, 0.8],
+  "Victor Wembanyama":        [2, 22.0, 11.0, 3.7, 1.2, 3.7],
+  "Anthony Edwards":          [5, 24.0, 5.0, 4.0, 1.3, 0.7],
+  "Tyrese Haliburton":        [5, 18.4, 3.9, 8.7, 1.5, 0.4],
+  "Ja Morant":                [6, 22.7, 5.7, 7.4, 0.9, 0.3],
+  "Trae Young":               [7, 25.3, 3.0, 9.5, 1.1, 0.1],
+  "Zion Williamson":          [5, 24.7, 6.7, 4.3, 1.0, 0.5],
+  "Paolo Banchero":           [3, 22.0, 6.7, 4.7, 0.9, 0.6],
+  "Blake Griffin":            [13, 19.8, 8.0, 3.9, 0.8, 0.4],
+  "LaMarcus Aldridge":        [15, 19.4, 8.2, 1.9, 0.7, 1.0],
+  "Tracy McGrady":            [15, 19.6, 5.6, 4.4, 1.2, 0.9],
+  "Vince Carter":             [22, 16.7, 4.3, 3.1, 1.0, 0.6],
+  "Carmelo Anthony":          [19, 22.5, 6.2, 2.7, 1.0, 0.5],
+  "Chris Bosh":               [13, 19.2, 8.5, 2.0, 0.8, 1.0],
+  "Pau Gasol":                [18, 17.0, 9.2, 3.2, 0.5, 1.6],
+  "Manu Ginobili":            [16, 13.3, 3.5, 3.8, 1.3, 0.3],
+  "Tony Parker":              [18, 15.5, 2.7, 5.6, 0.8, 0.1],
+  "Yao Ming":                 [8, 19.0, 9.2, 1.6, 0.4, 1.9],
+  "Alonzo Mourning":          [15, 17.1, 8.5, 1.1, 0.5, 2.8],
+  "Penny Hardaway":           [14, 15.2, 4.5, 5.0, 1.6, 0.4],
+  "Grant Hill":               [19, 16.7, 6.0, 4.1, 1.2, 0.6],
+  "Chris Webber":             [15, 20.7, 9.8, 4.2, 1.4, 1.4],
+  "Shawn Marion":             [16, 15.2, 8.7, 1.9, 1.5, 1.2],
+  "Ben Wallace":              [16, 5.7, 9.6, 1.3, 1.3, 2.0],
+  "Rasheed Wallace":          [16, 14.4, 6.7, 1.8, 1.0, 1.4],
+  "Dikembe Mutombo":          [18, 9.8, 10.3, 1.0, 0.4, 2.8],
+  "Tim Hardaway":             [14, 17.7, 3.3, 8.2, 1.6, 0.2],
+  "Kevin Johnson":            [12, 17.9, 3.3, 9.1, 1.5, 0.3],
+  "Mitch Richmond":           [14, 21.0, 3.9, 3.5, 1.2, 0.2],
+  "Pete Maravich":            [10, 24.2, 4.2, 5.4, 1.4, 0.3],
+  "Rick Barry":               [14, 24.8, 6.7, 4.9, 2.0, 0.5],
+  "George Gervin":            [14, 25.1, 5.3, 2.8, 1.3, 1.0],
+  "Dominique Wilkins":        [15, 24.8, 6.7, 2.5, 1.3, 0.6],
+  "Bob Pettit":               [11, 26.4, 16.2, 3.0, null, null],
+  "Elgin Baylor":             [14, 27.4, 13.5, 4.3, null, null],
+  "George Mikan":             [9, 23.1, 13.4, 2.8, null, null],
+  "Bob Cousy":                [14, 18.4, 5.2, 7.5, null, null],
+  "Walt Frazier":             [13, 18.9, 5.9, 6.1, 1.9, 0.2],
+  "Willis Reed":              [10, 18.7, 12.9, 1.8, null, null],
+  "Wes Unseld":               [13, 10.8, 14.0, 3.9, 0.8, 0.5],
+  "Dave Cowens":              [11, 17.6, 13.6, 3.8, 1.1, 0.9],
+  "Bill Walton":              [10, 13.3, 10.5, 3.4, 0.8, 2.2],
+  "Robert Parish":            [21, 14.5, 9.1, 1.4, 0.8, 1.5],
+  "Kevin McHale":             [13, 17.9, 7.3, 1.7, 0.4, 1.7],
+  "James Worthy":             [12, 17.6, 5.1, 3.0, 1.1, 0.6],
+  "Dennis Rodman":            [14, 7.3, 13.1, 1.8, 0.7, 0.6],
+  "Bernard King":             [14, 22.5, 5.8, 3.3, 1.0, 0.3],
+  "Adrian Dantley":           [15, 24.3, 5.7, 3.0, 1.0, 0.1],
+  "Alex English":             [15, 21.5, 5.5, 3.6, 0.9, 0.6],
+};
+function fmtStat(v){ return v == null ? "—" : v.toFixed(1); }
+
 const wikiCache = {};
 // Disambiguation overrides for names that don't resolve cleanly on Wikipedia.
 const WIKI_OVERRIDES = {
@@ -803,7 +920,7 @@ async function fetchWiki(name){
     const d = await r.json();
     const out = {
       extract: d.extract || "",
-      image: d.thumbnail?.source || d.originalimage?.source || null,
+      image: d.originalimage?.source || d.thumbnail?.source || null,
       url: d.content_urls?.desktop?.page || null,
     };
     wikiCache[name] = out;
@@ -852,10 +969,21 @@ function openConfirmPick(playerIdx, teamIdx){
 async function openPlayerInfo(playerIdx){
   const [name, pos] = PLAYERS[playerIdx];
   const funFact = FUN_FACTS[name];
+  const stats = STATS[name];
   const funBlock = funFact
     ? `<div class="bio" style="background:#2a1f0a;border-color:#5a4410;margin-bottom:8px">
          <div style="font-size:11px;color:var(--accent);letter-spacing:.5px;margin-bottom:4px">😄 FUN FACT</div>
          ${funFact}
+       </div>`
+    : "";
+  const statsBlock = stats
+    ? `<div class="stats-grid">
+         <div class="stat"><div class="v">${stats[0]}</div><div class="l">Seasons</div></div>
+         <div class="stat"><div class="v">${fmtStat(stats[1])}</div><div class="l">PPG</div></div>
+         <div class="stat"><div class="v">${fmtStat(stats[2])}</div><div class="l">RPG</div></div>
+         <div class="stat"><div class="v">${fmtStat(stats[3])}</div><div class="l">APG</div></div>
+         <div class="stat"><div class="v">${fmtStat(stats[4])}</div><div class="l">SPG</div></div>
+         <div class="stat"><div class="v">${fmtStat(stats[5])}</div><div class="l">BPG</div></div>
        </div>`
     : "";
   showPlayerModal(`
@@ -863,7 +991,7 @@ async function openPlayerInfo(playerIdx){
     <div class="pname">${name}</div>
     <div class="pmeta">${pos}</div>
     ${funBlock}
-    <div class="bio" id="pcardBio">Loading bio from Wikipedia…</div>
+    ${statsBlock}
     <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>
   `);
   document.getElementById("pcardClose").onclick = closePlayerModal;
@@ -874,11 +1002,6 @@ async function openPlayerInfo(playerIdx){
     photoEl.innerHTML = `<img src="${info.image}" alt="${name}">`;
   } else {
     photoEl.textContent = "No photo available";
-  }
-  const bioEl = document.getElementById("pcardBio");
-  if(bioEl){
-    bioEl.textContent = info.extract ||
-      "No bio available — Wikipedia didn't return a summary for this player.";
   }
 }
 
