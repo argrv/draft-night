@@ -970,7 +970,7 @@ function renderDraft(){
   document.getElementById("targetsBtn").style.display = canStar ? "" : "none";
   document.getElementById("targetsBtn").classList.toggle("on", showTargetsOnly);
   PLAYERS.forEach((p,i) => {
-    if(takenIdx.has(i)) return;
+    if(takenIdx.has(p[0])) return;
     if(state.filterPos !== "ALL" && !p[1].split("/").includes(state.filterPos)) return;
     if(q && !p[0].toLowerCase().includes(q)) return;
     if(showTargetsOnly && !isTargeted(i)) return;
@@ -2087,7 +2087,7 @@ function smartAIPick(teamIdx){
 
   let best = null, bestScore = -Infinity;
   PLAYERS.forEach((p, i) => {
-    if(takenIdx.has(i)) return;
+    if(takenIdx.has(p[0])) return;
     const rank = RANK_MAP[p[0]] || 250;
     // Rank dominates: top ranks ~398, rank 150 ~100, unranked ~0
     const baseScore = Math.max(0, (200 - Math.min(rank, 200)) * 2);
