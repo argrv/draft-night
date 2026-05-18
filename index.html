@@ -362,6 +362,29 @@ let state = loadLocal() || {...DEFAULT_STATE};
 let role = localStorage.getItem(ROLE_KEY); // "admin" | "0".."3" | null
 
 let audioCtx;
+function ensureAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playYourTurnSound(){
+  try {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    // Three ascending chimes for "your turn" — more attention-grabbing than pick sound.
+    [[523.25, 0], [659.25, 0.18], [783.99, 0.36]].forEach(([freq, t]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + t);
+      gain.gain.setValueAtTime(0.0001, now + t);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.32);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.35);
+    });
+  } catch(e){}
+}
 function playPickSound(){
   try {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -524,6 +547,7 @@ function updateStartBtn(){
   document.getElementById("startDraft").disabled = !filled;
 }
 
+let lastNotifiedPickIdx = -1;
 function renderDraft(){
   const pickIdx = state.picks.length;
   const done = pickIdx >= 4 * 25;
@@ -531,6 +555,14 @@ function renderDraft(){
   const onClock = done ? null : teamOnPick(pickIdx);
   const rem = remainingSeconds();
   const expired = !done && rem <= 0;
+
+  // "Your turn" sound: fires once per new pick when it's this device's turn.
+  // Admin hears it on every pick; teams hear it only when their team is up.
+  if(!done && pickIdx !== lastNotifiedPickIdx){
+    const mine = isAdmin() || myTeamIdx() === onClock;
+    if(mine && lastNotifiedPickIdx !== -1) playYourTurnSound();
+    lastNotifiedPickIdx = pickIdx;
+  }
 
   document.getElementById("pickNum").textContent = pickIdx + 1;
   document.getElementById("roundNum").textContent = round;
