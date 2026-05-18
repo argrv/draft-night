@@ -385,6 +385,40 @@ function playYourTurnSound(){
     });
   } catch(e){}
 }
+function playWarnSound(){
+  try {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    // Two short high beeps — urgent but not alarming
+    [[880, 0],[880, 0.18]].forEach(([f,t]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(f, now + t);
+      g.gain.setValueAtTime(0.0001, now + t);
+      g.gain.exponentialRampToValueAtTime(0.2, now + t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.13);
+      o.connect(g).connect(ctx.destination);
+      o.start(now + t); o.stop(now + t + 0.16);
+    });
+  } catch(e){}
+}
+function playBuzzerSound(){
+  try {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    // Long low buzzer — game over feel
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(140, now);
+    o.frequency.linearRampToValueAtTime(110, now + 1.5);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.35, now + 0.05);
+    g.gain.setValueAtTime(0.35, now + 1.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
+    o.connect(g).connect(ctx.destination);
+    o.start(now); o.stop(now + 1.55);
+  } catch(e){}
+}
 function playPickSound(){
   try {
     if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -548,6 +582,7 @@ function updateStartBtn(){
 }
 
 let lastNotifiedPickIdx = -1;
+let firedWarnings = {}; // {pickIdx: {30:true,10:true,0:true}}
 function renderDraft(){
   const pickIdx = state.picks.length;
   const done = pickIdx >= 4 * 25;
@@ -555,13 +590,20 @@ function renderDraft(){
   const onClock = done ? null : teamOnPick(pickIdx);
   const rem = remainingSeconds();
   const expired = !done && rem <= 0;
+  const mine = !done && (isAdmin() || myTeamIdx() === onClock);
 
   // "Your turn" sound: fires once per new pick when it's this device's turn.
-  // Admin hears it on every pick; teams hear it only when their team is up.
   if(!done && pickIdx !== lastNotifiedPickIdx){
-    const mine = isAdmin() || myTeamIdx() === onClock;
     if(mine && lastNotifiedPickIdx !== -1) playYourTurnSound();
     lastNotifiedPickIdx = pickIdx;
+  }
+
+  // Time warnings (only for the device on the clock, fired once per threshold per pick)
+  if(!done && mine){
+    const fired = firedWarnings[pickIdx] = firedWarnings[pickIdx] || {};
+    if(rem <= 30 && rem > 10 && !fired[30]){ fired[30] = true; playWarnSound(); }
+    if(rem <= 10 && rem > 0  && !fired[10]){ fired[10] = true; playWarnSound(); }
+    if(rem <= 0              && !fired[0]) { fired[0]  = true; playBuzzerSound(); }
   }
 
   document.getElementById("pickNum").textContent = pickIdx + 1;
