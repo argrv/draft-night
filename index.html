@@ -6,6 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>All-Time 2K26 Draft</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#ffb020"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <style>
   :root{
     --bg:#0b0d12; --panel:#141823; --panel2:#1b2030; --line:#2a3142;
@@ -207,14 +211,31 @@
 
 <div class="wrap">
   <div id="homeView" class="panel" style="display:none">
-    <h2>Who are you?</h2>
-    <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
-      Pick your role. You'll only be able to make selections for your team.
-      Admin can pick for anyone and control the draft timer.
-    </p>
-    <div class="role-grid" id="roleGrid"></div>
-    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
-      <button class="btn" id="mockBtn" style="width:100%">🎮 Try a Mock Draft (solo, vs AI)</button>
+    <div id="homeRoot">
+      <h2>What would you like to do?</h2>
+      <p style="font-size:13px;color:var(--muted);margin:4px 0 12px">
+        Live Draft is shared with your friends in real time (4 teams).
+        Mock Draft is solo vs AI (4–10 teams, doesn't touch the live draft).
+      </p>
+      <div class="role-grid">
+        <button class="role-btn" id="liveDraftBtn" style="background:#0e2538;border-color:#1f4566">
+          🏀 Live Draft
+        </button>
+        <button class="role-btn" id="mockBtn" style="background:#3a2c0a;border-color:#5a4410">
+          🎮 Mock Draft
+        </button>
+      </div>
+    </div>
+    <div id="homeLive" style="display:none">
+      <h2>Who are you?</h2>
+      <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
+        Pick your role. You'll only make selections for your team.
+        Admin can pick for anyone and control the draft timer.
+      </p>
+      <div class="role-grid" id="roleGrid"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="liveBackBtn">← Back</button>
+      </div>
     </div>
   </div>
 
@@ -238,8 +259,8 @@
         <span style="margin-left:10px">⏱ <span class="timer" id="timer">5:00</span></span>
       </div>
       <div class="row">
-        <button class="mini-btn" id="historyBtn" title="Pick history">📜</button>
         <button class="mini-btn" id="exportBtn" title="Export rosters">📋</button>
+        <button class="mini-btn" id="compareBtn" title="Compare players">⚖️</button>
         <button class="btn" id="undoBtn">Undo</button>
         <button class="btn danger" id="resetAll">Reset</button>
       </div>
@@ -349,6 +370,10 @@ const TEAMS_EXTRA = [
   {name:"Frostbite",      owner:"CPU 10", color:"#d35400"},
 ];
 let TEAMS = [...TEAMS_BASE];
+const TEAM_COLORS = [
+  "var(--t1)","var(--t2)","var(--t3)","var(--t4)",
+  "#e67e22","#16a085","#f1c40f","#8e44ad","#34495e","#d35400",
+];
 function setTeamCount(n){ TEAMS = [...TEAMS_BASE, ...TEAMS_EXTRA].slice(0, n); }
 
 // Expanded pool: ~250 All-Time legends + ~75 current stars. Names only, positions are primary 2K.
@@ -492,20 +517,57 @@ function totalPicks(){ return TEAMS.length * ROUNDS; }
 
 const DEFAULT_STATE = {
   order: [null,null,null,null],
-  picks: [],             // [{playerIdx, teamIdx}] or {teamIdx, skipped:true}
+  picks: [],             // [{name, teamIdx, at}] or {teamIdx, skipped:true, at}
   filterPos: "ALL",
   search: "",
   started: false,
   pickStartedAt: 0,      // ms timestamp (shared)
   pickOwner: {},         // {overallPickIdx: teamIdx} — overrides snake order
   pendingTrade: null,    // {from, to, fromPicks:[{kind,id}], toPicks:[...], at}
-  targets: {},           // { teamIdxStr: [playerIdx, ...] } — per-team target lists
+  targets: {},           // { teamIdxStr: [playerName, ...] } — per-team target lists
   chat: [],              // [{author, teamIdx, msg, at}]
   tradeHistory: [],      // [{from, to, fromPicks, toPicks, at, counter?}]
 };
 let showTargetsOnly = false; // local UI toggle
 
-let state = loadLocal() || {...DEFAULT_STATE};
+// Build a name → [name, pos, idx] map for O(1) lookups by name.
+const PLAYERS_BY_NAME = {};
+PLAYERS.forEach((p, i) => { PLAYERS_BY_NAME[p[0]] = [p[0], p[1], i]; });
+function playerInfo(name){ return PLAYERS_BY_NAME[name] || [name || "?", "?", -1]; }
+function pickName(p){
+  if(!p) return null;
+  if(p.name) return p.name;
+  if(p.playerIdx !== undefined) return PLAYERS[p.playerIdx]?.[0] || null;
+  return null;
+}
+function pickPos(p){ const n = pickName(p); return n ? playerInfo(n)[1] : "?"; }
+function pickPlayerIdx(p){ const n = pickName(p); return n ? playerInfo(n)[2] : -1; }
+
+// One-time migration from old playerIdx-based storage to name-based.
+function migrateState(s){
+  if(!s) return s;
+  if(Array.isArray(s.picks)){
+    s.picks = s.picks.map(p => {
+      if(!p) return p;
+      if(p.playerIdx !== undefined && !p.name){
+        const player = PLAYERS[p.playerIdx];
+        if(player) return { ...p, name: player[0], playerIdx: undefined };
+      }
+      return p;
+    });
+  }
+  if(s.targets && typeof s.targets === "object"){
+    Object.keys(s.targets).forEach(k => {
+      s.targets[k] = (s.targets[k] || []).map(item => {
+        if(typeof item === "number") return PLAYERS[item]?.[0] || null;
+        return item;
+      }).filter(Boolean);
+    });
+  }
+  return s;
+}
+
+let state = migrateState(loadLocal()) || {...DEFAULT_STATE};
 if(inMockMode && state.teamCount && state.teamCount > 4) setTeamCount(state.teamCount);
 let role = localStorage.getItem(ROLE_KEY); // "admin" | team index | null
 
@@ -548,23 +610,6 @@ function playWarnSound(){
       o.connect(g).connect(ctx.destination);
       o.start(now + t); o.stop(now + t + 0.16);
     });
-  } catch(e){}
-}
-function playBuzzerSound(){
-  try {
-    const ctx = ensureAudio();
-    const now = ctx.currentTime;
-    // Long low buzzer — game over feel
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = "sawtooth";
-    o.frequency.setValueAtTime(140, now);
-    o.frequency.linearRampToValueAtTime(110, now + 1.5);
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.35, now + 0.05);
-    g.gain.setValueAtTime(0.35, now + 1.3);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
-    o.connect(g).connect(ctx.destination);
-    o.start(now); o.stop(now + 1.55);
   } catch(e){}
 }
 function playPickSound(){
@@ -627,6 +672,7 @@ onSnapshot(DRAFT_DOC, (snap) => {
   state.targets = d.targets ?? state.targets ?? {};
   state.chat = d.chat ?? state.chat ?? [];
   state.tradeHistory = d.tradeHistory ?? state.tradeHistory ?? [];
+  migrateState(state);
   saveLocal();
   render();
 }, (err) => console.warn("Firestore subscribe failed:", err));
@@ -657,16 +703,18 @@ function myTargets(){
 }
 function isTargeted(playerIdx){
   const list = myTargets();
-  return list && list.includes(playerIdx);
+  if(!list) return false;
+  return list.includes(PLAYERS[playerIdx]?.[0]);
 }
 function toggleTarget(playerIdx){
   const ti = myTeamIdx();
   if(ti === null) return;
+  const name = PLAYERS[playerIdx]?.[0]; if(!name) return;
   const key = String(ti);
   state.targets = state.targets || {};
   const list = state.targets[key] || [];
-  const i = list.indexOf(playerIdx);
-  if(i >= 0) list.splice(i, 1); else list.push(playerIdx);
+  const i = list.indexOf(name);
+  if(i >= 0) list.splice(i, 1); else list.push(name);
   state.targets[key] = list;
   save();
 }
@@ -700,15 +748,18 @@ function picksOwnedBy(ti){
   return {made, future};
 }
 
+let homeStep = "root"; // "root" | "live"
 function render(){
   renderRoleTag();
   const home = document.getElementById("homeView");
   const setup = document.getElementById("setupView");
   const draft = document.getElementById("draftView");
   if(!role){
+    // Always ensure TEAMS is 4 when on home — guards against mock-leak
+    if(!inMockMode && TEAMS.length !== 4) setTeamCount(4);
     renderHome();
     home.style.display = "block"; setup.style.display = "none"; draft.style.display = "none";
-    document.getElementById("subtitle").textContent = "Choose your role to continue.";
+    document.getElementById("subtitle").textContent = "Choose Live or Mock Draft.";
     return;
   }
   if(!state.started){
@@ -731,25 +782,30 @@ function renderRoleTag(){
   el.innerHTML = `You: <b>${label}</b> · change`;
   el.onclick = () => {
     if(!confirm("Switch role? Your draft progress is safe.")) return;
-    // Always return to the real draft when changing role
     if(inMockMode){
       localStorage.removeItem(STORAGE_KEY_MOCK);
       inMockMode = false;
       localStorage.setItem(MODE_KEY, "real");
       state = loadLocal() || {...DEFAULT_STATE};
     }
+    setTeamCount(4);
+    homeStep = "root";
     role = null; localStorage.removeItem(ROLE_KEY); render();
   };
 }
 
 function renderHome(){
+  document.getElementById("homeRoot").style.display = homeStep === "root" ? "" : "none";
+  document.getElementById("homeLive").style.display = homeStep === "live" ? "" : "none";
+  if(homeStep !== "live") return;
+  // Live Draft view — always 4 teams
+  setTeamCount(4);
   const grid = document.getElementById("roleGrid");
   grid.innerHTML = "";
-  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
   TEAMS.forEach((t,i) => {
     const b = document.createElement("button");
     b.className = "role-btn"; b.dataset.r = i;
-    b.innerHTML = `<span class="rdot" style="background:${dots[i]}"></span>${t.name} — ${t.owner}`;
+    b.innerHTML = `<span class="rdot" style="background:${TEAM_COLORS[i]}"></span>${t.name} — ${t.owner}`;
     b.onclick = () => { role = String(i); localStorage.setItem(ROLE_KEY, role); render(); };
     grid.appendChild(b);
   });
@@ -852,8 +908,8 @@ function renderDraft(){
     up.style.display = "none";
   } else {
     up.style.display = "";
-    const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
     const PAST = 4, FUTURE = 6;
+    const dots = TEAM_COLORS;
     let html = "";
     // Past picks
     const start = Math.max(0, pickIdx - PAST);
@@ -862,7 +918,7 @@ function renderDraft(){
       const ti = p.teamIdx;
       const rnd = Math.floor(i / TEAMS.length) + 1;
       const label = p.skipped ? "— skipped —"
-        : `<b style="color:var(--text)">${PLAYERS[p.playerIdx][0]}</b>`;
+        : `<b style="color:var(--text)">${pickName(p)}</b>`;
       html += `<div class="pip" style="opacity:.85">
         <span class="pd" style="background:${dots[ti]}"></span>
         <span>${label}</span>
@@ -904,7 +960,7 @@ function renderDraft(){
   }
 
   // available players
-  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => p.playerIdx));
+  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => pickName(p)));
   const list = document.getElementById("players");
   list.innerHTML = "";
   const q = state.search.toLowerCase().trim();
@@ -945,7 +1001,7 @@ function renderDraft(){
     list.innerHTML = renderRecap();
     list.style.maxHeight = "none";
     list.querySelectorAll("[data-recap-player]").forEach(a => {
-      a.onclick = (e) => { e.preventDefault(); openPlayerInfo(parseInt(a.dataset.recapPlayer, 10)); };
+      a.onclick = (e) => { e.preventDefault(); openPlayerInfo(PLAYERS_BY_NAME[decodeURIComponent(a.dataset.recapPlayer)]?.[2] ?? -1); };
     });
   } else {
     list.style.maxHeight = "";
@@ -985,7 +1041,7 @@ function renderDraft(){
       inner += "<ol>" + myPicks.map(p =>
         p.skipped
           ? `<li class="skipped">— skipped — <small>(#${p.overall})</small></li>`
-          : `<li>${PLAYERS[p.playerIdx][0]} <small>(${PLAYERS[p.playerIdx][1]} · #${p.overall})</small></li>`
+          : `<li>${pickName(p)} <small>(${pickPos(p)} · #${p.overall})</small></li>`
       ).join("") + "</ol>";
     }
     div.innerHTML = inner;
@@ -1351,7 +1407,7 @@ function openConfirmPick(playerIdx, teamIdx){
     const pickIdx = state.picks.length;
     const onClock = teamOnPick(pickIdx);
     if(onClock !== teamIdx){ closePlayerModal(); render(); return; }
-    state.picks.push({playerIdx, teamIdx: onClock, at: Date.now()});
+    state.picks.push({name: PLAYERS[playerIdx][0], teamIdx: onClock, at: Date.now()});
     state.pickStartedAt = Date.now();
     playPickSound();
     save(); render();
@@ -1424,27 +1480,6 @@ document.getElementById("tradeModal").onclick = (e) => {
 
 function canActAsTeam(ti){ return isAdmin() || myTeamIdx() === ti; }
 
-function openTradeProposal(fromTeam){
-  if(state.pendingTrade){
-    alert("Resolve the current pending trade first.");
-    return;
-  }
-  // Step 1: pick target team
-  let html = `<h3>Propose Trade — ${TEAMS[fromTeam].name}</h3>
-    <p style="font-size:13px;color:var(--muted);margin:4px 0 10px">Choose the team to trade with:</p>`;
-  TEAMS.forEach((t,i) => {
-    if(i === fromTeam) return;
-    html += `<button class="team-pick" data-to="${i}">${t.name}</button>`;
-  });
-  html += `<div class="row" style="justify-content:flex-end;margin-top:8px">
-    <button class="btn" id="tradeCancel">Cancel</button></div>`;
-  showTradeModal(html);
-  document.getElementById("tradeCancel").onclick = closeTradeModal;
-  document.querySelectorAll("#tradeModalBox .team-pick").forEach(b => {
-    b.onclick = () => openTradePicker(fromTeam, parseInt(b.dataset.to, 10));
-  });
-}
-
 function openTradePicker(fromTeam, toTeam){
   const fromPicks = picksOwnedBy(fromTeam);
   const toPicks = picksOwnedBy(toTeam);
@@ -1453,7 +1488,7 @@ function openTradePicker(fromTeam, toTeam){
   function pickKey(side, kind, id){ return `${side}|${kind}|${id}`; }
   function renderPick(side, item){
     const label = item.kind === "made"
-      ? `${PLAYERS[item.p.playerIdx][0]} <span class="pp-meta">#${item.overall}</span>`
+      ? `${pickName(item.p)} <span class="pp-meta">#${item.overall}</span>`
       : `Round ${Math.floor((item.id)/TEAMS.length)+1} pick <span class="pp-meta">#${item.overall}</span>`;
     const key = pickKey(side, item.kind, item.id);
     const sel = selected[side].has(key);
@@ -1532,11 +1567,11 @@ function applyPendingTrade(){
     from: t.from, to: t.to, counter: !!t.counter, at: Date.now(),
     fromLabels: t.fromPicks.map(p =>
       p.kind === "made"
-        ? PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`
+        ? pickName(state.picks[p.id]) || `pick #${p.id+1}`
         : `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`),
     toLabels: t.toPicks.map(p =>
       p.kind === "made"
-        ? PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`
+        ? pickName(state.picks[p.id]) || `pick #${p.id+1}`
         : `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`),
   };
   state.tradeHistory = state.tradeHistory || [];
@@ -1562,7 +1597,7 @@ function renderTradeBanner(){
   const t = state.pendingTrade;
   if(!t){ el.innerHTML = ""; return; }
   const describe = (arr) => arr.length === 0 ? "(nothing)" : arr.map(p => {
-    if(p.kind === "made") return PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`;
+    if(p.kind === "made") return pickName(state.picks[p.id]) || `pick #${p.id+1}`;
     return `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`;
   }).join(", ");
   const canAccept = canActAsTeam(t.to);   // receiver or admin
@@ -1661,24 +1696,69 @@ document.getElementById("skipPickBtn").onclick = () => {
   save(); render();
 };
 
-// ---- Pick history ----
-document.getElementById("historyBtn").onclick = () => {
-  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
-  const rows = state.picks.map((p,i) => {
-    const rnd = Math.floor(i/TEAMS.length)+1;
-    const label = p.skipped ? "— skipped —"
-      : `<b>${PLAYERS[p.playerIdx][0]}</b> <span style="color:var(--muted)">(${PLAYERS[p.playerIdx][1]})</span>`;
-    return `<div class="h-row">
-      <span class="num">R${rnd}·#${i+1}</span>
-      <span class="dot" style="background:${dots[p.teamIdx]}"></span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${TEAMS[p.teamIdx].name} — ${label}</span>
-    </div>`;
-  }).reverse().join("");
-  showPlayerModal(`<h3>Pick History</h3>
-    <div class="history-list">${rows || `<div class="empty">No picks yet.</div>`}</div>
+// ---- Player comparison ----
+document.getElementById("compareBtn").onclick = () => openCompareModal();
+function openCompareModal(preselect = []){
+  const takenSet = new Set(state.picks.filter(p => !p.skipped).map(p => pickName(p)));
+  const avail = PLAYERS
+    .filter(p => !takenSet.has(p[0]) || preselect.includes(p[0]))
+    .map(p => p[0])
+    .sort();
+  const opts = (selected) => avail.map(n =>
+    `<option value="${n.replace(/"/g,"&quot;")}" ${selected===n?"selected":""}>${n}</option>`
+  ).join("");
+  const a = preselect[0] || avail[0] || "Michael Jordan";
+  const b = preselect[1] || avail[1] || "LeBron James";
+  showPlayerModal(`<h3>Compare Players</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
+      <select id="cmpA">${opts(a)}</select>
+      <select id="cmpB">${opts(b)}</select>
+    </div>
+    <div id="cmpBody"></div>
     <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>`);
   document.getElementById("pcardClose").onclick = closePlayerModal;
-};
+  const renderCmp = () => {
+    const aN = document.getElementById("cmpA").value;
+    const bN = document.getElementById("cmpB").value;
+    const aD = playerInfo(aN), bD = playerInfo(bN);
+    const aS = STATS[aN], bS = STATS[bN];
+    const aB = BEST_SEASON[aN], bB = BEST_SEASON[bN];
+    const row = (label, av, bv, hi) => {
+      const aVal = av == null ? "—" : (typeof av === "number" ? av.toFixed(1) : av);
+      const bVal = bv == null ? "—" : (typeof bv === "number" ? bv.toFixed(1) : bv);
+      const aBig = hi && typeof av === "number" && typeof bv === "number" && av > bv;
+      const bBig = hi && typeof av === "number" && typeof bv === "number" && bv > av;
+      return `<tr>
+        <td style="text-align:right;padding:3px 0;${aBig?"color:var(--accent);font-weight:700":""}">${aVal}</td>
+        <td style="text-align:center;color:var(--muted);font-size:11px;padding:3px 8px">${label}</td>
+        <td style="padding:3px 0;${bBig?"color:var(--accent);font-weight:700":""}">${bVal}</td>
+      </tr>`;
+    };
+    document.getElementById("cmpBody").innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;font-size:11px;color:var(--muted)">
+        <div>${aD[1]}</div><div style="text-align:right">${bD[1]}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        ${row("Seasons", aS?.[0], bS?.[0], true)}
+        ${row("PPG",     aS?.[1], bS?.[1], true)}
+        ${row("RPG",     aS?.[2], bS?.[2], true)}
+        ${row("APG",     aS?.[3], bS?.[3], true)}
+        ${row("SPG",     aS?.[4], bS?.[4], true)}
+        ${row("BPG",     aS?.[5], bS?.[5], true)}
+        ${(aB || bB) ? `
+          <tr><td colspan="3" style="padding-top:10px;color:var(--accent);font-size:11px;text-transform:uppercase;text-align:center">⭐ Best Season — ${aB?.[0]||"—"} vs ${bB?.[0]||"—"}</td></tr>
+          ${row("PPG", aB?.[1], bB?.[1], true)}
+          ${row("RPG", aB?.[2], bB?.[2], true)}
+          ${row("APG", aB?.[3], bB?.[3], true)}
+          ${row("SPG", aB?.[4], bB?.[4], true)}
+          ${row("BPG", aB?.[5], bB?.[5], true)}
+        ` : ""}
+      </table>`;
+  };
+  document.getElementById("cmpA").onchange = renderCmp;
+  document.getElementById("cmpB").onchange = renderCmp;
+  renderCmp();
+}
 
 // ---- Text export ----
 document.getElementById("exportBtn").onclick = async () => {
@@ -1690,7 +1770,7 @@ document.getElementById("exportBtn").onclick = async () => {
       .filter(p => p.teamIdx === ti && !p.skipped);
     if(myPicks.length === 0) txt += "  (no picks)\n";
     myPicks.forEach((p,i) => {
-      txt += `  ${i+1}. ${PLAYERS[p.playerIdx][0]} (${PLAYERS[p.playerIdx][1]}) — #${p.overall} overall\n`;
+      txt += `  ${i+1}. ${pickName(p)} (${pickPos(p)}) — #${p.overall} overall\n`;
     });
     txt += "\n";
   });
@@ -1707,21 +1787,86 @@ document.getElementById("exportBtn").onclick = async () => {
 };
 
 // ---- Draft recap (auto-shown when complete) ----
+function teamScore(ti){
+  return state.picks
+    .filter(p => !p.skipped && p.teamIdx === ti)
+    .reduce((sum, p) => {
+      const rank = RANK_MAP[pickName(p)] || 250;
+      return sum + Math.max(0, 250 - rank);
+    }, 0);
+}
+function gradesByCurve(){
+  const scores = TEAMS.map((_, ti) => teamScore(ti));
+  const hi = Math.max(...scores), lo = Math.min(...scores);
+  const range = Math.max(1, hi - lo);
+  return scores.map(s => {
+    const pct = (s - lo) / range; // 0..1
+    if(pct >= 0.85) return "A";
+    if(pct >= 0.65) return "A-";
+    if(pct >= 0.45) return "B";
+    if(pct >= 0.25) return "B-";
+    if(pct >= 0.10) return "C";
+    return "C-";
+  });
+}
+function bestLineup(ti){
+  // Greedy: assign positions PG/SG/SF/PF/C from the team's roster.
+  // For each slot, pick highest-ranked unassigned player whose listed positions include slot.
+  const roster = state.picks
+    .filter(p => !p.skipped && p.teamIdx === ti)
+    .map(p => {
+      const name = pickName(p);
+      return { name, pos: pickPos(p).split("/"), rank: RANK_MAP[name] || 250 };
+    });
+  const lineup = {};
+  const slots = ["PG","SG","SF","PF","C"];
+  const used = new Set();
+  slots.forEach(slot => {
+    const candidates = roster
+      .filter(r => !used.has(r.name) && r.pos.includes(slot))
+      .sort((a,b) => a.rank - b.rank);
+    if(candidates.length){
+      lineup[slot] = candidates[0].name;
+      used.add(candidates[0].name);
+    } else {
+      // fallback: highest-ranked unused player regardless of position
+      const fb = roster.filter(r => !used.has(r.name)).sort((a,b) => a.rank - b.rank)[0];
+      if(fb){ lineup[slot] = fb.name + " *"; used.add(fb.name); }
+      else lineup[slot] = "—";
+    }
+  });
+  return lineup;
+}
 function renderRecap(){
-  // shown inside renderDraft when done=true; replaces the available-players panel
-  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+  const dots = TEAM_COLORS;
+  const grades = gradesByCurve();
   let html = `<div class="recap"><h2>🏆 Draft Complete</h2>
-    <div style="color:var(--muted);font-size:13px">${new Date().toLocaleDateString()} · Tap a player to see their card.</div>
+    <div style="color:var(--muted);font-size:13px">${new Date().toLocaleDateString()} · Tap a player to see their card. <i>* = off-position fill</i></div>
     <div class="recap-grid">`;
   TEAMS.forEach((t,ti) => {
     const myPicks = state.picks
       .map((p,idx) => ({...p, overall: idx+1}))
       .filter(p => p.teamIdx === ti && !p.skipped);
-    html += `<div class="rteam"><h3><span class="dot" style="background:${dots[ti]};
-      width:10px;height:10px;border-radius:50%"></span>${t.name} <span style="color:var(--muted);font-weight:400">— ${t.owner}</span></h3>
+    const grade = grades[ti];
+    const lineup = bestLineup(ti);
+    html += `<div class="rteam">
+      <h3>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="dot" style="background:${dots[ti]};width:10px;height:10px;border-radius:50%"></span>${t.name}
+          <span style="color:var(--muted);font-weight:400;font-size:12px">— ${t.owner}</span>
+        </span>
+        <span style="background:var(--accent);color:#1a1407;padding:2px 8px;border-radius:999px;font-size:14px;font-weight:700">${grade}</span>
+      </h3>
+      <div style="font-size:11px;color:var(--accent);text-transform:uppercase;margin:6px 0 4px">Best Lineup</div>
+      <div style="font-size:13px;line-height:1.5;background:var(--panel);padding:6px 8px;border-radius:8px">
+        <b>PG</b> ${lineup.PG} · <b>SG</b> ${lineup.SG} · <b>SF</b> ${lineup.SF}<br>
+        <b>PF</b> ${lineup.PF} · <b>C</b> ${lineup.C}
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin:8px 0 4px">Full Roster</div>
       <ol>${myPicks.map(p =>
-        `<li><a href="#" data-recap-player="${p.playerIdx}" style="color:var(--text);text-decoration:none">${PLAYERS[p.playerIdx][0]}</a> <span style="color:var(--muted);font-size:11px">(${PLAYERS[p.playerIdx][1]})</span></li>`
-      ).join("")}</ol></div>`;
+        `<li><a href="#" data-recap-player="${encodeURIComponent(pickName(p))}" style="color:var(--text);text-decoration:none">${pickName(p)}</a> <span style="color:var(--muted);font-size:11px">(${pickPos(p)})</span></li>`
+      ).join("")}</ol>
+    </div>`;
   });
   html += `</div></div>`;
   return html;
@@ -1751,7 +1896,7 @@ function sendChat(){
 function renderActivity(){
   const feedEl = document.getElementById("activityFeed");
   if(!feedEl) return;
-  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+  const dots = TEAM_COLORS;
   const items = [];
   state.picks.forEach((p, i) => {
     items.push({type:"pick", at: p.at || (i * 1000), pickIdx: i, p});
@@ -1769,7 +1914,7 @@ function renderActivity(){
       const p = it.p;
       const rnd = Math.floor(it.pickIdx/TEAMS.length)+1;
       const label = p.skipped ? `<i>skipped</i>` :
-        `<b>${PLAYERS[p.playerIdx][0]}</b> <span style="color:var(--muted)">(${PLAYERS[p.playerIdx][1]})</span>`;
+        `<b>${pickName(p)}</b> <span style="color:var(--muted)">(${pickPos(p)})</span>`;
       return `<div class="act pick">
         <div class="ic">🏀</div>
         <div class="body">
@@ -1802,6 +1947,17 @@ function renderActivity(){
     </div>`;
   }).join("") || `<div class="empty">Nothing here yet — draft picks, trades, and chat will show up live.</div>`;
 }
+
+// ---- Home routing ----
+document.getElementById("liveDraftBtn").onclick = () => {
+  setTeamCount(4);
+  homeStep = "live";
+  render();
+};
+document.getElementById("liveBackBtn").onclick = () => {
+  homeStep = "root";
+  render();
+};
 
 // ---- Mock draft ----
 document.getElementById("mockBtn").onclick = () => {
@@ -1861,6 +2017,7 @@ function exitMock(){
   setTeamCount(4);
   state = loadLocal() || {...DEFAULT_STATE};
   role = null;
+  homeStep = "root";
   localStorage.removeItem(ROLE_KEY);
   render();
 }
@@ -1913,7 +2070,7 @@ function positionCounts(teamIdx){
   const c = {PG:0, SG:0, SF:0, PF:0, C:0};
   state.picks.forEach(p => {
     if(p.skipped || p.teamIdx !== teamIdx) return;
-    const primary = PLAYERS[p.playerIdx][1].split("/")[0];
+    const primary = pickPos(p).split("/")[0];
     if(c[primary] !== undefined) c[primary]++;
   });
   return c;
@@ -1922,7 +2079,7 @@ function positionCounts(teamIdx){
 // Smarter AI: rank dominates; position-need is a tiebreaker among top candidates;
 // late-round picks weight need more heavily.
 function smartAIPick(teamIdx){
-  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => p.playerIdx));
+  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => pickName(p)));
   const counts = positionCounts(teamIdx);
   const teamPicks = state.picks.filter(p => !p.skipped && p.teamIdx === teamIdx).length;
   // Rounds 1-6: rank dominates. Rounds 7-12: position need ramps up.
@@ -1959,7 +2116,7 @@ function pickValue(p){
   if(p.kind === "made"){
     const player = state.picks[p.id];
     if(!player || player.skipped) return 0;
-    const rank = RANK_MAP[PLAYERS[player.playerIdx][0]] || 250;
+    const rank = RANK_MAP[pickName(player)] || 250;
     return Math.max(0, 250 - rank);
   }
   // future pick: earlier overall = more valuable
@@ -2058,7 +2215,7 @@ function scheduleAIPick(){
     const liveOnClock = teamOnPick(state.picks.length);
     const idx = smartAIPick(liveOnClock);
     if(idx === null) return;
-    state.picks.push({playerIdx: idx, teamIdx: liveOnClock, at: Date.now()});
+    state.picks.push({name: PLAYERS[idx][0], teamIdx: liveOnClock, at: Date.now()});
     state.pickStartedAt = Date.now();
     playPickSound();
     saveLocal();
