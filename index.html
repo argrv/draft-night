@@ -950,7 +950,8 @@ function renderDraft(){
     const div = document.createElement("div");
     div.className = "team" + (onClock === ti ? " active" : "");
     div.dataset.i = ti;
-    const tradeBtn = (canActAsTeam(ti) && !state.pendingTrade && state.started)
+    const myT = myTeamIdx();
+    const tradeBtn = (myT !== null && myT !== ti && !state.pendingTrade && state.started)
       ? `<button class="trade-btn" data-trade="${ti}">Trade</button>` : "";
     let inner = `<h3>
       <span><span class="dot"></span>${t.name}${tradeBtn}</span>
@@ -970,7 +971,10 @@ function renderDraft(){
   document.querySelectorAll("[data-trade]").forEach(b => {
     b.onclick = (e) => {
       e.stopPropagation();
-      openTradeProposal(parseInt(b.dataset.trade, 10));
+      const myT = myTeamIdx();
+      if(myT === null) return;
+      if(state.pendingTrade){ alert("Resolve the current pending trade first."); return; }
+      openTradePicker(myT, parseInt(b.dataset.trade, 10));
     };
   });
 }
@@ -1349,7 +1353,7 @@ function openTradePicker(fromTeam, toTeam){
   showTradeModal(build());
 
   function wire(){
-    document.getElementById("tradeBack").onclick = () => openTradeProposal(fromTeam);
+    document.getElementById("tradeBack").onclick = closeTradeModal;
     document.getElementById("tradePropose").onclick = () => {
       const fromList = [...selected.from].map(k => {
         const [,kind,id] = k.split("|"); return {kind, id: parseInt(id,10)};
