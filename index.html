@@ -258,12 +258,12 @@ const PLAYERS = [
   ["Bill Bradley","SF"],["Hal Greer","SG"],["Sam Jones","SG"],
   ["Billy Cunningham","SF"],["Paul Arizin","SF"],["Tom Heinsohn","PF"],
   ["Frank Ramsey","SF"],["Cliff Hagan","SF"],["Jack Twyman","SF"],
-  ["Slater Martin","PG"],["Lenny Wilkens","PG"],["Dave Bing","PG"],
+  ["Lenny Wilkens","PG"],["Dave Bing","PG"],
   ["Gail Goodrich","PG"],["Lou Hudson","SG"],["Jo Jo White","PG"],
   ["Calvin Murphy","PG"],["Phil Chenier","SG"],["Elvin Hayes","PF"],
   ["Dan Issel","C"],["Spencer Haywood","PF"],["George McGinnis","PF"],
   ["Artis Gilmore","C"],["Connie Hawkins","SF"],["Mel Daniels","C"],
-  ["Roger Brown","SF"],["Zelmo Beaty","C"],["KC Jones","PG"],
+  ["Roger Brown","SF"],["KC Jones","PG"],
 
   // ===== 80s legends =====
   ["Dominique Wilkins","SF"],["George Gervin","SG"],["David Thompson","SG"],
@@ -705,6 +705,66 @@ function renderDraft(){
 }
 
 // ---- Player modals (confirm + info) ----
+// Hand-curated funny/quirky facts for the most well-known players. Real anecdotes only.
+const FUN_FACTS = {
+  "Michael Jordan": "Got cut from his high school varsity team as a sophomore. Famously sticks his tongue out when driving — a habit he picked up from his dad doing repairs.",
+  "LeBron James": "Bites his fingernails so often on the bench it's its own meme. Once drank wine out of a sippy cup on Instagram.",
+  "Stephen Curry": "His face has appeared on Kraft Mac & Cheese boxes. Still drives the beat-up Chevy Caprice his dad gave him in high school.",
+  "Kevin Durant": "Has multiple burner Twitter/Instagram accounts that he's used to defend himself in arguments with fans. Got caught when he forgot to switch profiles.",
+  "Kobe Bryant": "Won an Oscar in 2018 for an animated short. Spoke fluent Italian from his childhood in Italy.",
+  "Shaquille O'Neal": "Has a doctorate in education. Was a sworn reserve police officer in multiple cities. Released four rap albums, one went platinum.",
+  "Tim Duncan": "Was a competitive swimmer headed for the Olympics until Hurricane Hugo destroyed his pool. Has a master's in psychology.",
+  "Dirk Nowitzki": "Plays the saxophone and the guitar. Reportedly serenaded his wife with both.",
+  "Yao Ming": "Married a 6'3\" Chinese national-team basketball player. Both his parents were also pro basketball players.",
+  "Hakeem Olajuwon": "Came to the U.S. originally to play soccer, not basketball. Was a goalie growing up in Nigeria.",
+  "Magic Johnson": "Owns or has owned stakes in the Dodgers, Sparks, WNBA, Starbucks franchises, movie theaters, and an airline.",
+  "Larry Bird": "Worked as a garbageman in French Lick, Indiana, after dropping out of Indiana University his freshman year.",
+  "Wilt Chamberlain": "Claimed in his autobiography that he'd slept with 20,000 women. Math says he'd need a new one every day for 55 years.",
+  "Kareem Abdul-Jabbar": "Played the co-pilot Roger Murdock in the movie Airplane! Has written a series of mystery novels about Sherlock Holmes's brother.",
+  "Nikola Jokic": "Obsessed with horse racing — owns racehorses in Serbia and prefers their company to most humans. Reportedly chose to fly commercial to spend more time with horses.",
+  "Giannis Antetokounmpo": "Sold counterfeit watches, bags, and sunglasses on the streets of Athens as a teenager to help feed his family.",
+  "Luka Doncic": "Played pro basketball in Spain at 13. Made his EuroLeague debut at 16, becoming the youngest player ever.",
+  "Joel Embiid": "Learned basketball almost entirely by watching Hakeem Olajuwon YouTube videos. Started playing at 15.",
+  "Victor Wembanyama": "Has a wingspan over 8 feet — longer than most NBA players are tall. His feet are size 20.",
+  "Shai Gilgeous-Alexander": "First cousin of fellow NBA guard Nickeil Alexander-Walker. Has his own coffee brand.",
+  "Anthony Edwards": "Originally a football star — was a top high school running back before fully committing to basketball.",
+  "Tyrese Haliburton": "Owns farmland in Iowa near his hometown. His pregame Twitter is part of his persona.",
+  "Klay Thompson": "His French bulldog Rocco has his own Instagram with hundreds of thousands of followers. Klay once skipped a Warriors trip after Rocco ate something.",
+  "Draymond Green": "Walked into the NBA Draft green room without an agent and famously waited until the second round to be picked. Reminds people of it constantly.",
+  "Manu Ginobili": "Once swatted a bat out of mid-air with his bare hand during a live game vs. the Kings.",
+  "Tony Parker": "Was married to actress Eva Longoria for four years.",
+  "Pau Gasol": "Was a medical student at the University of Barcelona before turning pro. Considered becoming a doctor.",
+  "Penny Hardaway": "His real first name is Anfernee. Now coaches his alma mater, Memphis.",
+  "Dennis Rodman": "Genuinely close friends with Kim Jong-un. Has visited North Korea multiple times. Got married to himself in a wedding dress in 1996.",
+  "Russell Westbrook": "Has his own clothing line and walks the runway at Paris Fashion Week.",
+  "James Harden": "Owns a strip club in Houston called Houston Pole. His beard is reportedly insured.",
+  "Anthony Davis": "Trademarked the phrase 'Fear the Brow.' Refused to shave his unibrow even after offers from companies.",
+  "Damian Lillard": "Is a successful rapper under the name Dame D.O.L.L.A. — has released multiple albums and collaborated with Lil Wayne.",
+  "Reggie Miller": "His sister Cheryl Miller was a more decorated basketball player than him — she scored 105 points in a single high school game.",
+  "Allen Iverson": "Spent a real practice-related press conference saying the word 'practice' 22 times. It became one of the most-quoted clips in sports.",
+  "Ron Artest": "Legally changed his name to Metta World Peace, then later to Metta Sandiford-Artest. Auctioned off his championship ring for mental health charity.",
+  "Metta World Peace": "Legally changed his name from Ron Artest, then again to Metta Sandiford-Artest. Auctioned his championship ring for mental health charity.",
+  "Bill Russell": "Won 11 NBA titles in 13 years. Cackled with his iconic deep laugh so much teammates said it was a strategy to intimidate refs.",
+  "Charles Barkley": "Has openly admitted to gambling losses approaching $30 million. Once spit on a fan and hit a little girl.",
+  "Scottie Pippen": "Was the team's water boy as a freshman at Central Arkansas before growing into a star.",
+  "Vince Carter": "Famously dunked over 7'2\" French center Frédéric Weis at the 2000 Olympics in what's called 'le dunk de la mort' (the dunk of death).",
+  "Karl Malone": "Drives a fleet of monster trucks. Was a licensed long-haul trucker during his playing career.",
+  "Steve Nash": "Was almost a pro soccer player — his dad played professionally in South Africa.",
+  "Bam Adebayo": "His real first name is Edrice. 'Bam' came from a Flintstones cartoon his mom liked.",
+  "Karl-Anthony Towns": "His mother passed away from COVID in 2020 and he became a vocal advocate for vaccination. Speaks fluent Spanish — his mom was Dominican.",
+  "Ja Morant": "His father played college ball with Ray Allen and now does most of Ja's media interviews.",
+  "Trae Young": "Modeled his game and even his appearance on Stephen Curry as a kid. Has 'Ice Trae' tattooed on his neck.",
+  "Jalen Brunson": "His dad Rick Brunson is a Knicks assistant coach — they reunite every day at work.",
+  "Devin Booker": "Used to date Kendall Jenner. Famously dropped 70 points in a game as a 20-year-old.",
+  "Jayson Tatum": "Named his son after Kobe Bryant, who FaceTimed Tatum to give advice before he passed away.",
+  "Donovan Mitchell": "Was almost a pro baseball player — was scouted as a shortstop in high school.",
+  "Carmelo Anthony": "Was the only NBA player to room with a teammate (LeBron) at the 2004 Olympics — they've been best friends since.",
+  "Joakim Noah": "His father Yannick Noah won the French Open in 1983. His grandfather played pro soccer.",
+  "Pete Maravich": "Wore floppy gray socks on purpose because they were a lucky pair from college that he never replaced.",
+  "Bob Cousy": "Was originally left-handed. Taught himself to dribble right-handed after breaking his right arm as a kid — became famously ambidextrous.",
+  "Bill Walton": "Was a 'Deadhead' who attended over 850 Grateful Dead concerts. Considered Jerry Garcia a close friend.",
+  "DeMar DeRozan": "Cried publicly about anxiety and depression in 2018 — helped destigmatize mental health in pro sports.",
+};
 const wikiCache = {};
 // Disambiguation overrides for names that don't resolve cleanly on Wikipedia.
 const WIKI_OVERRIDES = {
@@ -791,10 +851,18 @@ function openConfirmPick(playerIdx, teamIdx){
 
 async function openPlayerInfo(playerIdx){
   const [name, pos] = PLAYERS[playerIdx];
+  const funFact = FUN_FACTS[name];
+  const funBlock = funFact
+    ? `<div class="bio" style="background:#2a1f0a;border-color:#5a4410;margin-bottom:8px">
+         <div style="font-size:11px;color:var(--accent);letter-spacing:.5px;margin-bottom:4px">😄 FUN FACT</div>
+         ${funFact}
+       </div>`
+    : "";
   showPlayerModal(`
     <div class="photo" id="pcardPhoto">Loading photo…</div>
     <div class="pname">${name}</div>
     <div class="pmeta">${pos}</div>
+    ${funBlock}
     <div class="bio" id="pcardBio">Loading bio from Wikipedia…</div>
     <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>
   `);
