@@ -95,6 +95,14 @@
   .player.locked{opacity:.55;cursor:not-allowed}
   .player.locked:hover{background:var(--panel2)}
   .skipped{color:var(--muted);font-style:italic}
+  .upcoming{display:flex;gap:6px;overflow-x:auto;padding:8px 0;margin-top:8px;
+    -webkit-overflow-scrolling:touch}
+  .upcoming .pip{flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;font-size:12px;display:flex;align-items:center;gap:6px;
+    white-space:nowrap}
+  .upcoming .pip.current{background:#3a2c0a;border-color:var(--accent)}
+  .upcoming .pip .pd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .upcoming .pip .pn{font-size:10px;color:var(--muted)}
   .pcard{max-width:480px}
   .pcard .photo{width:100%;background:#0f1320;border-radius:10px;margin-bottom:10px;
     display:flex;align-items:center;justify-content:center;
@@ -160,6 +168,7 @@
         <button class="btn danger" id="resetAll">Reset Draft</button>
       </div>
     </div>
+    <div class="upcoming" id="upcoming"></div>
     <div class="expired-banner" id="expiredBanner" style="display:none">
       <b>⏰ Time expired</b> for <span id="expiredTeam"></span>.
       <div class="row" style="justify-content:center;margin-top:8px" id="adminTimerActions">
@@ -643,6 +652,28 @@ function renderDraft(){
   else {
     timerEl.textContent = fmtTime(rem);
     timerEl.className = "timer" + (rem <= 0 ? " expired" : rem <= 60 ? " warn" : "");
+  }
+
+  // upcoming picks strip — shows current + next 7
+  const up = document.getElementById("upcoming");
+  if(done){
+    up.style.display = "none";
+  } else {
+    up.style.display = "";
+    const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+    const N = 8;
+    let html = "";
+    for(let k = 0; k < N && pickIdx + k < TOTAL_PICKS; k++){
+      const idx = pickIdx + k;
+      const ti = teamOnPick(idx);
+      const rnd = Math.floor(idx / 4) + 1;
+      html += `<div class="pip ${k===0?"current":""}">
+        <span class="pd" style="background:${dots[ti]}"></span>
+        <span>${k===0?"NOW: ":""}${TEAMS[ti].name}</span>
+        <span class="pn">·R${rnd}·#${idx+1}</span>
+      </div>`;
+    }
+    up.innerHTML = html;
   }
 
   // expired banner
