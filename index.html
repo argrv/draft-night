@@ -781,9 +781,12 @@ function renderDraft(){
   if(mockWrap){
     mockWrap.innerHTML = inMockMode
       ? `<div style="margin-top:8px;text-align:center"><span class="mock-pill">🎮 MOCK DRAFT MODE</span>
-         <button class="btn" id="exitMockBtn" style="margin-left:8px">Exit Mock</button></div>` : "";
+         <button class="btn" id="restartMockBtn" style="margin-left:8px">Restart</button>
+         <button class="btn" id="exitMockBtn" style="margin-left:6px">Exit to Home</button></div>` : "";
     const eb = document.getElementById("exitMockBtn");
     if(eb) eb.onclick = exitMock;
+    const rb = document.getElementById("restartMockBtn");
+    if(rb) rb.onclick = restartMock;
   }
   // chat FAB
   chatFab.style.display = role ? "" : "none";
@@ -1644,7 +1647,18 @@ function exitMock(){
   inMockMode = false;
   localStorage.setItem(MODE_KEY, "real");
   state = loadLocal() || {...DEFAULT_STATE};
+  // Drop role so we return to home screen
+  role = null;
+  localStorage.removeItem(ROLE_KEY);
   render();
+}
+function restartMock(){
+  if(!confirm("Restart mock draft? Current mock progress will be cleared.")) return;
+  const teamIdx = parseInt(role, 10);
+  const shuffled = [0,1,2,3].sort(() => Math.random() - 0.5);
+  state = {...DEFAULT_STATE, order: shuffled, started: true, pickStartedAt: Date.now(),
+    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[]};
+  saveLocal(); render(); scheduleAIPick();
 }
 // Hand-ranked top 150 — consensus all-time greats + current stars, ordered by overall value.
 const RANK_LIST = [
