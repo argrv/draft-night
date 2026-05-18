@@ -937,7 +937,10 @@ function renderDraft(){
 
   // teams
   renderTradeBanner();
-  if(inMockMode) maybeCpuRespondToTrade();
+  if(inMockMode){
+    maybeCpuRespondToTrade();
+    scheduleAIPick();
+  }
   const teamsEl = document.getElementById("teams");
   teamsEl.innerHTML = "";
   TEAMS.forEach((t,ti) => {
@@ -1840,14 +1843,17 @@ let aiTimer = null;
 function scheduleAIPick(){
   if(!inMockMode) return;
   clearTimeout(aiTimer);
+  if(state.pendingTrade) return;            // wait for trade to resolve
   const pickIdx = state.picks.length;
   if(pickIdx >= TOTAL_PICKS) return;
   const onClock = teamOnPick(pickIdx);
   if(onClock === parseInt(role, 10)) return; // human's turn — wait
   aiTimer = setTimeout(() => {
-    const idx = smartAIPick(onClock);
+    if(state.pendingTrade) return;          // re-check at fire time
+    const liveOnClock = teamOnPick(state.picks.length);
+    const idx = smartAIPick(liveOnClock);
     if(idx === null) return;
-    state.picks.push({playerIdx: idx, teamIdx: onClock});
+    state.picks.push({playerIdx: idx, teamIdx: liveOnClock});
     state.pickStartedAt = Date.now();
     playPickSound();
     saveLocal();
