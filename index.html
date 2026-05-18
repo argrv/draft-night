@@ -259,7 +259,7 @@
       <div class="pick-info">
         Pick <b id="pickNum">1</b> · Round <b id="roundNum">1</b> · On the clock:
         <b id="onClock">—</b>
-        <span style="margin-left:10px">⏱ <span class="timer" id="timer">5:00</span></span>
+        <span id="timerWrap" style="margin-left:10px">⏱ <span class="timer" id="timer">5:00</span></span>
       </div>
       <div class="row">
         <button class="mini-btn" id="exportBtn" title="Export rosters">📋</button>
@@ -874,8 +874,8 @@ function renderDraft(){
   const done = pickIdx >= totalPicks();
   const round = Math.floor(pickIdx / TEAMS.length) + 1;
   const onClock = done ? null : teamOnPick(pickIdx);
-  const rem = remainingSeconds();
-  const expired = !done && rem <= 0;
+  const rem = inMockMode ? Infinity : remainingSeconds();
+  const expired = !done && !inMockMode && rem <= 0;
   const mine = !done && (isAdmin() || myTeamIdx() === onClock);
 
   // "Your turn" sound: fires once per new pick when it's this device's turn.
@@ -884,8 +884,8 @@ function renderDraft(){
     lastNotifiedPickIdx = pickIdx;
   }
 
-  // Time warnings (only for the device on the clock, fired once per threshold per pick)
-  if(!done && mine){
+  // Time warnings (live draft only — no timer in mock)
+  if(!done && mine && !inMockMode){
     const fired = firedWarnings[pickIdx] = firedWarnings[pickIdx] || {};
     if(rem <= 30 && rem > 10 && !fired[30]){ fired[30] = true; playWarnSound(); }
     if(rem <= 10 && rem > 0  && !fired[10]){ fired[10] = true; playWarnSound(); }
@@ -900,11 +900,17 @@ function renderDraft(){
     `${pickIdx} picks made · ${PLAYERS.length - pickIdx} players remaining`;
 
   // timer
+  const timerWrap = document.getElementById("timerWrap");
   const timerEl = document.getElementById("timer");
-  if(done){ timerEl.textContent = "—"; timerEl.className = "timer"; }
-  else {
-    timerEl.textContent = fmtTime(rem);
-    timerEl.className = "timer" + (rem <= 0 ? " expired" : rem <= 60 ? " warn" : "");
+  if(inMockMode){
+    timerWrap.style.display = "none";
+  } else {
+    timerWrap.style.display = "";
+    if(done){ timerEl.textContent = "—"; timerEl.className = "timer"; }
+    else {
+      timerEl.textContent = fmtTime(rem);
+      timerEl.className = "timer" + (rem <= 0 ? " expired" : rem <= 60 ? " warn" : "");
+    }
   }
 
   // Timeline strip — shows recent picks (with player names) + current + upcoming
