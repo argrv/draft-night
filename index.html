@@ -1811,13 +1811,13 @@ document.getElementById("mockBtn").onclick = () => {
     <p style="font-size:13px;color:var(--muted)">Choose your league size. 4 is the real-draft size; 5–10 are mock-only fun.</p>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0">`;
   for(let n = 4; n <= 10; n++){
-    html += `<button class="btn" data-mockN="${n}" style="padding:14px;font-size:16px;font-weight:600">${n}</button>`;
+    html += `<button class="btn" data-mock-n="${n}" style="padding:14px;font-size:16px;font-weight:600">${n}</button>`;
   }
   html += `</div>
     <div class="row" style="justify-content:flex-end"><button class="btn" id="mockCancel">Cancel</button></div>`;
   showPlayerModal(html);
   document.getElementById("mockCancel").onclick = closePlayerModal;
-  document.querySelectorAll("[data-mockN]").forEach(b => {
+  document.querySelectorAll("[data-mock-n]").forEach(b => {
     b.onclick = () => mockChooseTeam(parseInt(b.dataset.mockN, 10));
   });
 };
