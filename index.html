@@ -984,8 +984,22 @@ function renderDraft(){
   const sm = state.statsMode || "career";
   sModeBtn.textContent = sm === "peak" ? "🌟 Peak" : "📊 Career";
   sModeBtn.classList.toggle("peak", sm === "peak");
-  PLAYERS.forEach((p,i) => {
-    if(takenIdx.has(p[0])) return;
+  // Sort by current statsMode's PPG descending, so the board doesn't telegraph our internal rank.
+  const sortPPG = (p) => {
+    const mode = state.statsMode || "career";
+    if(mode === "peak"){
+      const bs = BEST_SEASON[p[0]];
+      if(bs && bs[1] != null) return bs[1];
+    }
+    const st = STATS[p[0]];
+    if(st && st[1] != null) return st[1];
+    return -1;
+  };
+  const playersSorted = PLAYERS
+    .map((p, i) => ({p, i}))
+    .filter(({p}) => !takenIdx.has(p[0]))
+    .sort((a, b) => sortPPG(b.p) - sortPPG(a.p));
+  playersSorted.forEach(({p, i}) => {
     if(state.filterPos !== "ALL" && !p[1].split("/").includes(state.filterPos)) return;
     if(q && !p[0].toLowerCase().includes(q)) return;
     if(showTargetsOnly && !isTargeted(i)) return;
@@ -1435,6 +1449,41 @@ const STATS = {
   "Collin Sexton":                   [7, 19.2, 2.9, 4.0, 0.8, 0.2],
   "Kyle Kuzma":                      [8, 16.8, 6.4, 2.7, 0.7, 0.5],
   "Cameron Johnson":                 [6, 12.0, 4.0, 2.4, 0.8, 0.3],
+  "Dolph Schayes":                   [16, 18.5, 12.1, 3.1, null, null],
+  "Earl Monroe":                     [13, 18.8, 3.0, 3.9, 0.7, 0.1],
+  "Nate Archibald":                  [13, 18.8, 2.3, 7.4, 1.3, 0.1],
+  "Frank Ramsey":                    [9, 13.4, 5.4, 1.8, null, null],
+  "Cliff Hagan":                     [10, 17.7, 6.9, 3.1, null, null],
+  "Jack Twyman":                     [11, 19.2, 6.6, 2.2, null, null],
+  "Lou Hudson":                      [13, 20.2, 4.4, 2.7, 0.7, 0.2],
+  "Jo Jo White":                     [12, 17.2, 4.0, 4.9, 1.3, 0.2],
+  "Phil Chenier":                    [10, 17.2, 2.5, 2.8, 0.9, 0.2],
+  "George McGinnis":                 [11, 17.2, 9.8, 3.7, 1.5, 0.4],
+  "Artis Gilmore":                   [12, 17.1, 10.1, 1.9, 0.5, 2.1],
+  "Connie Hawkins":                  [7, 16.5, 8.0, 3.3, 0.5, 0.7],
+  "Mel Daniels":                     [9, 18.4, 14.7, 1.6, null, null],
+  "Roger Brown":                     [8, 17.4, 5.9, 4.0, null, null],
+  "KC Jones":                        [9, 7.4, 3.5, 4.3, null, null],
+  "David Thompson":                  [9, 22.7, 4.1, 3.3, 1.1, 1.0],
+  "Andrew Toney":                    [8, 15.9, 1.7, 4.2, 0.7, 0.1],
+  "Mychal Thompson":                 [12, 13.7, 7.4, 2.0, 0.7, 1.4],
+  "Otis Birdsong":                   [12, 18.6, 3.5, 3.6, 1.1, 0.1],
+  "World B. Free":                   [13, 20.3, 2.4, 3.7, 1.1, 0.1],
+  "Micheal Ray Richardson":          [9, 14.8, 5.5, 7.0, 2.6, 0.2],
+  "Sidney Wicks":                    [10, 16.8, 8.7, 3.2, 0.8, 0.6],
+  "Truck Robinson":                  [11, 15.3, 9.3, 1.4, 0.6, 0.4],
+  "Mark Price":                      [12, 15.2, 2.6, 6.7, 1.2, 0.1],
+  "Mark Jackson":                    [17, 9.6, 3.8, 8.0, 1.1, 0.1],
+  "Terry Porter":                    [17, 12.2, 3.0, 5.6, 1.0, 0.1],
+  "Mookie Blaylock":                 [13, 13.5, 4.1, 6.7, 2.3, 0.4],
+  "Rod Strickland":                  [17, 13.2, 3.7, 7.3, 1.5, 0.1],
+  "Kenny Anderson":                  [14, 12.6, 3.1, 6.1, 1.3, 0.1],
+  "Hersey Hawkins":                  [13, 14.7, 3.5, 2.7, 1.6, 0.4],
+  "Rik Smits":                       [12, 14.8, 6.1, 1.5, 0.4, 1.1],
+  "Cedric Ceballos":                 [11, 14.3, 5.4, 1.3, 0.6, 0.2],
+  "Xavier McDaniel":                 [11, 15.7, 7.0, 1.8, 0.9, 0.7],
+  "Dale Davis":                      [16, 8.0, 8.0, 0.8, 0.6, 1.1],
+  "Bennedict Mathurin":              [3, 14.5, 4.0, 2.0, 0.6, 0.3],
 };
 function fmtStat(v){ return v == null ? "—" : v.toFixed(1); }
 
@@ -1614,6 +1663,33 @@ const BEST_SEASON = {
   "Gordon Hayward":          ["2016-17", 21.9, 5.4, 3.5, 1.0, 0.3],
   "Goran Dragic":            ["2013-14", 20.3, 3.2, 5.9, 1.4, 0.3],
   "Eric Bledsoe":            ["2016-17", 21.1, 4.8, 6.3, 1.4, 0.5],
+  "Earl Monroe":             ["1968-69", 25.8, 3.5, 4.9, null, null],
+  "Nate Archibald":          ["1972-73", 34.0, 2.6, 11.4, null, null],
+  "Lou Hudson":              ["1972-73", 27.1, 4.1, 3.4, null, null],
+  "Jo Jo White":             ["1971-72", 23.1, 4.8, 5.3, null, null],
+  "Mark Price":              ["1988-89", 18.9, 2.7, 8.4, 1.4, 0.1],
+  "Mark Jackson":            ["1996-97", 12.2, 4.4, 11.4, 1.1, 0.1],
+  "Mookie Blaylock":         ["1996-97", 17.4, 4.5, 6.7, 2.7, 0.5],
+  "Rod Strickland":          ["1997-98", 17.8, 5.3, 10.5, 1.7, 0.2],
+  "Kenny Anderson":          ["1993-94", 18.8, 3.4, 9.6, 1.7, 0.2],
+  "Hersey Hawkins":          ["1990-91", 22.1, 4.6, 2.7, 1.9, 0.5],
+  "Rik Smits":               ["1995-96", 18.5, 6.9, 1.3, 0.4, 1.6],
+  "Cedric Ceballos":         ["1994-95", 21.7, 8.0, 1.6, 0.7, 0.1],
+  "Xavier McDaniel":         ["1987-88", 21.4, 7.3, 2.1, 1.4, 0.6],
+  "David Thompson":          ["1977-78", 27.2, 4.9, 4.5, 1.2, 1.4],
+  "Connie Hawkins":          ["1969-70", 24.6, 10.4, 4.8, null, null],
+  "Artis Gilmore":           ["1981-82", 18.5, 12.1, 2.3, 0.5, 2.3],
+  "George McGinnis":         ["1975-76", 23.0, 12.6, 4.7, 2.2, 0.5],
+  "Phil Chenier":            ["1974-75", 21.8, 3.7, 2.7, 1.4, 0.3],
+  "Andrew Toney":            ["1982-83", 19.7, 1.9, 5.0, 0.8, 0.1],
+  "Mel Daniels":             ["1968-69", 24.0, 16.5, 1.7, null, null],
+  "World B. Free":           ["1979-80", 30.2, 3.5, 4.2, 1.0, 0.1],
+  "Micheal Ray Richardson":  ["1979-80", 15.3, 6.6, 10.1, 2.6, 0.3],
+  "Sidney Wicks":            ["1971-72", 24.5, 11.5, 4.3, null, null],
+  "Truck Robinson":          ["1977-78", 22.7, 15.7, 1.4, 0.5, 0.6],
+  "Otis Birdsong":           ["1980-81", 24.6, 4.3, 4.7, 1.4, 0.1],
+  "Mychal Thompson":         ["1981-82", 20.8, 11.3, 2.7, 1.3, 1.5],
+  "Dale Davis":              ["1999-2000", 10.0, 9.9, 0.9, 0.6, 1.3],
 };
 
 const wikiCache = {};
