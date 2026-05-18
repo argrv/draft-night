@@ -819,16 +819,31 @@ function renderDraft(){
     timerEl.className = "timer" + (rem <= 0 ? " expired" : rem <= 60 ? " warn" : "");
   }
 
-  // upcoming picks strip — shows current + next 7
+  // Timeline strip — shows recent picks (with player names) + current + upcoming
   const up = document.getElementById("upcoming");
   if(done){
     up.style.display = "none";
   } else {
     up.style.display = "";
     const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
-    const N = 8;
+    const PAST = 4, FUTURE = 6;
     let html = "";
-    for(let k = 0; k < N && pickIdx + k < TOTAL_PICKS; k++){
+    // Past picks
+    const start = Math.max(0, pickIdx - PAST);
+    for(let i = start; i < pickIdx; i++){
+      const p = state.picks[i];
+      const ti = p.teamIdx;
+      const rnd = Math.floor(i / 4) + 1;
+      const label = p.skipped ? "— skipped —"
+        : `<b style="color:var(--text)">${PLAYERS[p.playerIdx][0]}</b>`;
+      html += `<div class="pip" style="opacity:.85">
+        <span class="pd" style="background:${dots[ti]}"></span>
+        <span>${label}</span>
+        <span class="pn">·R${rnd}·#${i+1}</span>
+      </div>`;
+    }
+    // Current + upcoming
+    for(let k = 0; k < FUTURE && pickIdx + k < TOTAL_PICKS; k++){
       const idx = pickIdx + k;
       const ti = teamOnPick(idx);
       const rnd = Math.floor(idx / 4) + 1;
@@ -839,6 +854,9 @@ function renderDraft(){
       </div>`;
     }
     up.innerHTML = html;
+    // Auto-scroll so the "NOW" pip is visible
+    const cur = up.querySelector(".pip.current");
+    if(cur) cur.scrollIntoView({inline:"center", block:"nearest", behavior:"instant"});
   }
 
   // expired banner
