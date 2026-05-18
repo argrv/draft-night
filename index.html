@@ -209,10 +209,10 @@ const db = getFirestore(fbApp);
 const DRAFT_DOC = doc(db, "drafts", "main");
 
 const TEAMS = [
-  {name:"Team Coqui",       color:"var(--t1)"},
-  {name:"Clutch City",      color:"var(--t2)"},
-  {name:"Greek Freaks",     color:"var(--t3)"},
-  {name:"Clearwater Comrades", color:"var(--t4)"},
+  {name:"Coqui PR",            owner:"Antonio", color:"var(--t1)"},
+  {name:"Clutch City",         owner:"Jon",     color:"var(--t2)"},
+  {name:"Greek Freaks",        owner:"Pete",    color:"var(--t3)"},
+  {name:"Clearwater Comrades", owner:"AJ",      color:"var(--t4)"},
 ];
 
 // Expanded pool: ~250 All-Time legends + ~75 current stars. Names only, positions are primary 2K.
@@ -540,7 +540,7 @@ function renderHome(){
   TEAMS.forEach((t,i) => {
     const b = document.createElement("button");
     b.className = "role-btn"; b.dataset.r = i;
-    b.innerHTML = `<span class="rdot" style="background:${dots[i]}"></span>${t.name}`;
+    b.innerHTML = `<span class="rdot" style="background:${dots[i]}"></span>${t.name} — ${t.owner}`;
     b.onclick = () => { role = String(i); localStorage.setItem(ROLE_KEY, role); render(); };
     grid.appendChild(b);
   });
