@@ -147,7 +147,23 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, onSnapshot, setDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCuO0gR7OOOdF6jmtPq2kbbjII98XTlgC0",
+  authDomain: "draft-night-6fc48.firebaseapp.com",
+  projectId: "draft-night-6fc48",
+  storageBucket: "draft-night-6fc48.firebasestorage.app",
+  messagingSenderId: "610201178452",
+  appId: "1:610201178452:web:cc399dd7dc8719cbe3f8c1",
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const DRAFT_DOC = doc(db, "drafts", "main");
+
 const TEAMS = [
   {name:"Team Coqui",       color:"var(--t1)"},
   {name:"Clutch City",      color:"var(--t2)"},
@@ -196,18 +212,46 @@ const PLAYERS = [
 
 const STORAGE_KEY = "alltime2k26-draft-v1";
 
-let state = load() || {
-  order: [null,null,null,null], // first-round team indexes
-  picks: [],                    // [{playerIdx, teamIdx}]
+const DEFAULT_STATE = {
+  order: [null,null,null,null],
+  picks: [],
   filterPos: "ALL",
   search: "",
   started: false,
 };
 
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function load(){
+let state = loadLocal() || {...DEFAULT_STATE};
+let suppressNextLocalSave = false;
+
+function loadLocal(){
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
 }
+function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// Remote sync: shared state lives in Firestore doc drafts/main.
+// filterPos/search stay local (per-device UI prefs).
+async function save(){
+  saveLocal();
+  try {
+    await setDoc(DRAFT_DOC, {
+      order: state.order,
+      picks: state.picks,
+      started: state.started,
+      updatedAt: Date.now(),
+    });
+  } catch(e){ console.warn("Firestore write failed:", e); }
+}
+
+onSnapshot(DRAFT_DOC, (snap) => {
+  if(!snap.exists()) return;
+  const d = snap.data();
+  // Merge remote shared fields; keep local UI prefs.
+  state.order = d.order ?? state.order;
+  state.picks = d.picks ?? state.picks;
+  state.started = d.started ?? state.started;
+  saveLocal();
+  render();
+}, (err) => console.warn("Firestore subscribe failed:", err));
 
 // Snake order generator
 function teamOnPick(pickIdx){
