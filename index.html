@@ -103,6 +103,22 @@
   .upcoming .pip.current{background:#3a2c0a;border-color:var(--accent)}
   .upcoming .pip .pd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
   .upcoming .pip .pn{font-size:10px;color:var(--muted)}
+  .trade-btn{font-size:11px;background:#0f2030;border:1px solid #1d4a6e;color:#9cf;
+    padding:3px 8px;border-radius:6px;cursor:pointer;margin-left:6px}
+  .trade-banner{background:#0e2538;border:1px solid #1f4566;border-radius:10px;
+    padding:12px;margin-top:8px}
+  .trade-banner h3{margin:0 0 6px;font-size:14px;color:#9cf}
+  .trade-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+  .trade-col{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
+  .trade-col h4{margin:0 0 6px;font-size:12px;color:var(--muted);text-transform:uppercase}
+  .trade-col ul{list-style:none;margin:0;padding:0;font-size:13px}
+  .trade-col li{padding:3px 0}
+  .pick-pick{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;margin-bottom:4px;cursor:pointer;font-size:13px}
+  .pick-pick.sel{background:#2a1f0a;border-color:var(--accent)}
+  .pick-pick input{margin:0;flex-shrink:0}
+  .pick-pick .pp-meta{color:var(--muted);font-size:11px;margin-left:auto}
+  .trade-list{max-height:38vh;overflow-y:auto}
   .pcard{max-width:480px}
   .pcard .photo{width:100%;background:#0f1320;border-radius:10px;margin-bottom:10px;
     display:flex;align-items:center;justify-content:center;
@@ -169,6 +185,7 @@
       </div>
     </div>
     <div class="upcoming" id="upcoming"></div>
+    <div id="tradeBannerWrap"></div>
     <div class="expired-banner" id="expiredBanner" style="display:none">
       <b>⏰ Time expired</b> for <span id="expiredTeam"></span>.
       <div class="row" style="justify-content:center;margin-top:8px" id="adminTimerActions">
@@ -210,6 +227,10 @@
 
 <div class="modal" id="playerModal">
   <div class="box pcard" id="playerModalBox"></div>
+</div>
+
+<div class="modal" id="tradeModal">
+  <div class="box" style="max-width:560px" id="tradeModalBox"></div>
 </div>
 
 <div class="modal" id="teamModal">
@@ -389,6 +410,8 @@ const DEFAULT_STATE = {
   search: "",
   started: false,
   pickStartedAt: 0,      // ms timestamp (shared)
+  pickOwner: {},         // {overallPickIdx: teamIdx} — overrides snake order
+  pendingTrade: null,    // {from, to, fromPicks:[{kind,id}], toPicks:[...], at}
 };
 
 let state = loadLocal() || {...DEFAULT_STATE};
@@ -487,6 +510,8 @@ async function save(){
       picks: state.picks,
       started: state.started,
       pickStartedAt: state.pickStartedAt || 0,
+      pickOwner: state.pickOwner || {},
+      pendingTrade: state.pendingTrade || null,
       updatedAt: Date.now(),
     });
   } catch(e){ console.warn("Firestore write failed:", e); }
@@ -499,6 +524,8 @@ onSnapshot(DRAFT_DOC, (snap) => {
   state.picks = d.picks ?? state.picks;
   state.started = d.started ?? state.started;
   state.pickStartedAt = d.pickStartedAt ?? state.pickStartedAt;
+  state.pickOwner = d.pickOwner ?? state.pickOwner ?? {};
+  state.pendingTrade = d.pendingTrade ?? null;
   saveLocal();
   render();
 }, (err) => console.warn("Firestore subscribe failed:", err));
@@ -521,14 +548,32 @@ function fmtTime(s){
   return `${m}:${ss.toString().padStart(2,"0")}`;
 }
 
-// Snake order generator
-function teamOnPick(pickIdx){
-  // pickIdx 0-based
-  const round = Math.floor(pickIdx / 4); // 0-based
+// Snake order generator (with trade overrides)
+function snakeTeamOnPick(pickIdx){
+  const round = Math.floor(pickIdx / 4);
   const slot = pickIdx % 4;
   const order = state.order;
   if(round % 2 === 0) return order[slot];
   return order[3 - slot];
+}
+function teamOnPick(pickIdx){
+  const override = state.pickOwner && state.pickOwner[pickIdx];
+  if(override !== undefined && override !== null) return override;
+  return snakeTeamOnPick(pickIdx);
+}
+
+// All picks (made + future) currently owned by a team
+function picksOwnedBy(ti){
+  const made = [];
+  state.picks.forEach((p, i) => {
+    if(p.skipped) return;
+    if(p.teamIdx === ti) made.push({kind:"made", id:i, overall:i+1, p});
+  });
+  const future = [];
+  for(let k = state.picks.length; k < TOTAL_PICKS; k++){
+    if(teamOnPick(k) === ti) future.push({kind:"future", id:k, overall:k+1});
+  }
+  return {made, future};
 }
 
 function render(){
@@ -717,6 +762,7 @@ function renderDraft(){
     `${shown} shown · ${PLAYERS.length - takenIdx.size} available total${hint}`;
 
   // teams
+  renderTradeBanner();
   const teamsEl = document.getElementById("teams");
   teamsEl.innerHTML = "";
   TEAMS.forEach((t,ti) => {
@@ -726,7 +772,10 @@ function renderDraft(){
     const div = document.createElement("div");
     div.className = "team" + (onClock === ti ? " active" : "");
     div.dataset.i = ti;
-    let inner = `<h3><span><span class="dot"></span>${t.name}</span>
+    const tradeBtn = (canActAsTeam(ti) && !state.pendingTrade && state.started)
+      ? `<button class="trade-btn" data-trade="${ti}">Trade</button>` : "";
+    let inner = `<h3>
+      <span><span class="dot"></span>${t.name}${tradeBtn}</span>
       <span style="color:var(--muted);font-weight:400">${myPicks.filter(p=>!p.skipped).length}</span></h3>`;
     if(myPicks.length === 0){
       inner += `<div class="empty">No picks yet</div>`;
@@ -739,6 +788,12 @@ function renderDraft(){
     }
     div.innerHTML = inner;
     teamsEl.appendChild(div);
+  });
+  document.querySelectorAll("[data-trade]").forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      openTradeProposal(parseInt(b.dataset.trade, 10));
+    };
   });
 }
 
@@ -1034,6 +1089,168 @@ async function openPlayerInfo(playerIdx){
   } else {
     photoEl.textContent = "No photo available";
   }
+}
+
+// ---- Trade modals ----
+function showTradeModal(html){
+  document.getElementById("tradeModalBox").innerHTML = html;
+  document.getElementById("tradeModal").classList.add("show");
+}
+function closeTradeModal(){ document.getElementById("tradeModal").classList.remove("show"); }
+document.getElementById("tradeModal").onclick = (e) => {
+  if(e.target.id === "tradeModal") closeTradeModal();
+};
+
+function canActAsTeam(ti){ return isAdmin() || myTeamIdx() === ti; }
+
+function openTradeProposal(fromTeam){
+  if(state.pendingTrade){
+    alert("Resolve the current pending trade first.");
+    return;
+  }
+  // Step 1: pick target team
+  let html = `<h3>Propose Trade — ${TEAMS[fromTeam].name}</h3>
+    <p style="font-size:13px;color:var(--muted);margin:4px 0 10px">Choose the team to trade with:</p>`;
+  TEAMS.forEach((t,i) => {
+    if(i === fromTeam) return;
+    html += `<button class="team-pick" data-to="${i}">${t.name}</button>`;
+  });
+  html += `<div class="row" style="justify-content:flex-end;margin-top:8px">
+    <button class="btn" id="tradeCancel">Cancel</button></div>`;
+  showTradeModal(html);
+  document.getElementById("tradeCancel").onclick = closeTradeModal;
+  document.querySelectorAll("#tradeModalBox .team-pick").forEach(b => {
+    b.onclick = () => openTradePicker(fromTeam, parseInt(b.dataset.to, 10));
+  });
+}
+
+function openTradePicker(fromTeam, toTeam){
+  const fromPicks = picksOwnedBy(fromTeam);
+  const toPicks = picksOwnedBy(toTeam);
+  const selected = { from: new Set(), to: new Set() };
+
+  function pickKey(side, kind, id){ return `${side}|${kind}|${id}`; }
+  function renderPick(side, item){
+    const label = item.kind === "made"
+      ? `${PLAYERS[item.p.playerIdx][0]} <span class="pp-meta">#${item.overall}</span>`
+      : `Round ${Math.floor((item.id)/4)+1} pick <span class="pp-meta">#${item.overall}</span>`;
+    const key = pickKey(side, item.kind, item.id);
+    const sel = selected[side].has(key);
+    return `<div class="pick-pick ${sel?"sel":""}" data-key="${key}">
+      <input type="checkbox" ${sel?"checked":""}/>${label}</div>`;
+  }
+  function build(){
+    return `<h3>Trade Builder</h3>
+      <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
+        Select equal numbers of picks from each side. Made picks and future picks can both be traded.
+      </p>
+      <div class="trade-cols">
+        <div class="trade-col">
+          <h4>${TEAMS[fromTeam].name} sends</h4>
+          <div class="trade-list" id="fromList">
+            ${[...fromPicks.made, ...fromPicks.future].map(it => renderPick("from", it)).join("") ||
+              `<div class="empty">No picks to trade</div>`}
+          </div>
+        </div>
+        <div class="trade-col">
+          <h4>${TEAMS[toTeam].name} sends</h4>
+          <div class="trade-list" id="toList">
+            ${[...toPicks.made, ...toPicks.future].map(it => renderPick("to", it)).join("") ||
+              `<div class="empty">No picks to trade</div>`}
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin:6px 0" id="tradeCount">
+        Selected: 0 ↔ 0
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" id="tradeBack">Back</button>
+        <button class="btn primary" id="tradePropose" disabled>Propose Trade</button>
+      </div>`;
+  }
+  showTradeModal(build());
+
+  function wire(){
+    document.getElementById("tradeBack").onclick = () => openTradeProposal(fromTeam);
+    document.getElementById("tradePropose").onclick = () => {
+      const fromList = [...selected.from].map(k => {
+        const [,kind,id] = k.split("|"); return {kind, id: parseInt(id,10)};
+      });
+      const toList = [...selected.to].map(k => {
+        const [,kind,id] = k.split("|"); return {kind, id: parseInt(id,10)};
+      });
+      state.pendingTrade = {
+        from: fromTeam, to: toTeam,
+        fromPicks: fromList, toPicks: toList,
+        at: Date.now(),
+      };
+      save(); closeTradeModal(); render();
+    };
+    document.querySelectorAll("#tradeModalBox .pick-pick").forEach(el => {
+      el.onclick = () => {
+        const k = el.dataset.key;
+        const side = k.split("|")[0];
+        if(selected[side].has(k)) selected[side].delete(k);
+        else selected[side].add(k);
+        el.classList.toggle("sel");
+        el.querySelector("input").checked = selected[side].has(k);
+        const fc = selected.from.size, tc = selected.to.size;
+        document.getElementById("tradeCount").textContent = `Selected: ${fc} ↔ ${tc}`;
+        document.getElementById("tradePropose").disabled = !(fc > 0 && fc === tc);
+      };
+    });
+  }
+  wire();
+}
+
+function applyPendingTrade(){
+  const t = state.pendingTrade;
+  if(!t) return;
+  // Build pairs: re-assign each picked item to the other team
+  const all = [
+    ...t.fromPicks.map(p => ({...p, newOwner: t.to})),
+    ...t.toPicks.map(p   => ({...p, newOwner: t.from})),
+  ];
+  all.forEach(p => {
+    if(p.kind === "made"){
+      if(state.picks[p.id]) state.picks[p.id].teamIdx = p.newOwner;
+    } else {
+      state.pickOwner[p.id] = p.newOwner;
+    }
+  });
+  state.pendingTrade = null;
+  save();
+}
+
+function renderTradeBanner(){
+  const el = document.getElementById("tradeBannerWrap");
+  const t = state.pendingTrade;
+  if(!t){ el.innerHTML = ""; return; }
+  const describe = (arr) => arr.length === 0 ? "(nothing)" : arr.map(p => {
+    if(p.kind === "made") return PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`;
+    return `R${Math.floor(p.id/4)+1} pick #${p.id+1}`;
+  }).join(", ");
+  const canAccept = canActAsTeam(t.to);   // receiver or admin
+  const canCancel = canActAsTeam(t.from) || isAdmin();
+  el.innerHTML = `<div class="trade-banner">
+    <h3>🔁 Pending Trade</h3>
+    <div style="font-size:13px;line-height:1.5">
+      <b>${TEAMS[t.from].name}</b> sends: ${describe(t.fromPicks)}<br>
+      <b>${TEAMS[t.to].name}</b> sends: ${describe(t.toPicks)}
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      ${canCancel ? `<button class="btn" id="tradeCancelBtn">Cancel</button>` : ""}
+      ${canAccept ? `<button class="btn danger" id="tradeDeclineBtn">Decline</button>
+      <button class="btn primary" id="tradeAcceptBtn">Accept</button>` :
+      `<span style="font-size:12px;color:var(--muted)">Waiting for ${TEAMS[t.to].name} to respond…</span>`}
+    </div>
+  </div>`;
+  const cancelBtn = document.getElementById("tradeCancelBtn");
+  if(cancelBtn) cancelBtn.onclick = () => { state.pendingTrade = null; save(); render(); };
+  const declineBtn = document.getElementById("tradeDeclineBtn");
+  if(declineBtn) declineBtn.onclick = () => { state.pendingTrade = null; save(); render(); };
+  const acceptBtn = document.getElementById("tradeAcceptBtn");
+  if(acceptBtn) acceptBtn.onclick = () => { applyPendingTrade(); render(); };
 }
 
 // ---- Team modal (order setup) ----
