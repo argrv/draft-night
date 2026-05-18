@@ -348,6 +348,8 @@ const PLAYERS = [
 const STORAGE_KEY = "alltime2k26-draft-v1";
 const ROLE_KEY = "alltime2k26-role-v1";
 const PICK_SECONDS = 300; // 5 minutes
+const ROUNDS = 12;          // roster cap per team
+const TOTAL_PICKS = 4 * ROUNDS;
 
 const DEFAULT_STATE = {
   order: [null,null,null,null],
@@ -585,7 +587,7 @@ let lastNotifiedPickIdx = -1;
 let firedWarnings = {}; // {pickIdx: {30:true,10:true,0:true}}
 function renderDraft(){
   const pickIdx = state.picks.length;
-  const done = pickIdx >= 4 * 25;
+  const done = pickIdx >= TOTAL_PICKS;
   const round = Math.floor(pickIdx / 4) + 1;
   const onClock = done ? null : teamOnPick(pickIdx);
   const rem = remainingSeconds();
@@ -752,7 +754,7 @@ document.getElementById("skipPickBtn").onclick = () => {
 
 // Timer tick — re-render once per second to update countdown
 setInterval(() => {
-  if(state.started && state.picks.length < 4*25) render();
+  if(state.started && state.picks.length < TOTAL_PICKS) render();
 }, 1000);
 document.getElementById("posFilter").onchange = (e) => {
   state.filterPos = e.target.value; save(); renderDraft();
