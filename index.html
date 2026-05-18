@@ -714,6 +714,13 @@ function renderRoleTag(){
   el.innerHTML = `You: <b>${label}</b> · change`;
   el.onclick = () => {
     if(!confirm("Switch role? Your draft progress is safe.")) return;
+    // Always return to the real draft when changing role
+    if(inMockMode){
+      localStorage.removeItem(STORAGE_KEY_MOCK);
+      inMockMode = false;
+      localStorage.setItem(MODE_KEY, "real");
+      state = loadLocal() || {...DEFAULT_STATE};
+    }
     role = null; localStorage.removeItem(ROLE_KEY); render();
   };
 }
