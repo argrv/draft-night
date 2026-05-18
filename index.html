@@ -811,7 +811,7 @@ function renderDraft(){
     const fired = firedWarnings[pickIdx] = firedWarnings[pickIdx] || {};
     if(rem <= 30 && rem > 10 && !fired[30]){ fired[30] = true; playWarnSound(); }
     if(rem <= 10 && rem > 0  && !fired[10]){ fired[10] = true; playWarnSound(); }
-    if(rem <= 0              && !fired[0]) { fired[0]  = true; playBuzzerSound(); }
+    if(rem <= 0              && !fired[0]) { fired[0]  = true; }
   }
 
   document.getElementById("pickNum").textContent = pickIdx + 1;
