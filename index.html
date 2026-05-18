@@ -55,6 +55,12 @@
   .team[data-i="1"] h3 .dot{background:var(--t2)}
   .team[data-i="2"] h3 .dot{background:var(--t3)}
   .team[data-i="3"] h3 .dot{background:var(--t4)}
+  .team[data-i="4"] h3 .dot{background:#e67e22}
+  .team[data-i="5"] h3 .dot{background:#16a085}
+  .team[data-i="6"] h3 .dot{background:#f1c40f}
+  .team[data-i="7"] h3 .dot{background:#8e44ad}
+  .team[data-i="8"] h3 .dot{background:#34495e}
+  .team[data-i="9"] h3 .dot{background:#d35400}
   .team ol{margin:0;padding-left:22px;font-size:13px;min-height:30px}
   .team li{padding:2px 0}
   .team li small{color:var(--muted);margin-left:4px}
@@ -328,12 +334,22 @@ const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 const DRAFT_DOC = doc(db, "drafts", "main");
 
-const TEAMS = [
+const TEAMS_BASE = [
   {name:"Coqui PR",            owner:"Antonio", color:"var(--t1)"},
   {name:"Clutch City",         owner:"Jon",     color:"var(--t2)"},
   {name:"Greek Freaks",        owner:"Pete",    color:"var(--t3)"},
   {name:"Clearwater Comrades", owner:"AJ",      color:"var(--t4)"},
 ];
+const TEAMS_EXTRA = [
+  {name:"Lone Stars",     owner:"CPU 5",  color:"#e67e22"},
+  {name:"Mile High",      owner:"CPU 6",  color:"#16a085"},
+  {name:"Bayou Bandits",  owner:"CPU 7",  color:"#f1c40f"},
+  {name:"Empire State",   owner:"CPU 8",  color:"#8e44ad"},
+  {name:"Sunset Kings",   owner:"CPU 9",  color:"#34495e"},
+  {name:"Frostbite",      owner:"CPU 10", color:"#d35400"},
+];
+let TEAMS = [...TEAMS_BASE];
+function setTeamCount(n){ TEAMS = [...TEAMS_BASE, ...TEAMS_EXTRA].slice(0, n); }
 
 // Expanded pool: ~250 All-Time legends + ~75 current stars. Names only, positions are primary 2K.
 const PLAYERS = [
@@ -469,11 +485,10 @@ const STORAGE_KEY_REAL = "alltime2k26-draft-v1";
 const STORAGE_KEY_MOCK = "alltime2k26-mock-v1";
 const MODE_KEY = "alltime2k26-mode";
 let inMockMode = localStorage.getItem(MODE_KEY) === "mock";
-const STORAGE_KEY = inMockMode ? STORAGE_KEY_MOCK : STORAGE_KEY_REAL;
 const ROLE_KEY = "alltime2k26-role-v1";
 const PICK_SECONDS = 300; // 5 minutes
 const ROUNDS = 12;          // roster cap per team
-const TOTAL_PICKS = 4 * ROUNDS;
+function totalPicks(){ return TEAMS.length * ROUNDS; }
 
 const DEFAULT_STATE = {
   order: [null,null,null,null],
@@ -491,7 +506,8 @@ const DEFAULT_STATE = {
 let showTargetsOnly = false; // local UI toggle
 
 let state = loadLocal() || {...DEFAULT_STATE};
-let role = localStorage.getItem(ROLE_KEY); // "admin" | "0".."3" | null
+if(inMockMode && state.teamCount && state.teamCount > 4) setTeamCount(state.teamCount);
+let role = localStorage.getItem(ROLE_KEY); // "admin" | team index | null
 
 let audioCtx;
 function ensureAudio(){
@@ -657,11 +673,12 @@ function toggleTarget(playerIdx){
 
 // Snake order generator (with trade overrides)
 function snakeTeamOnPick(pickIdx){
-  const round = Math.floor(pickIdx / 4);
-  const slot = pickIdx % 4;
+  const n = TEAMS.length;
+  const round = Math.floor(pickIdx / n);
+  const slot = pickIdx % n;
   const order = state.order;
   if(round % 2 === 0) return order[slot];
-  return order[3 - slot];
+  return order[n - 1 - slot];
 }
 function teamOnPick(pickIdx){
   const override = state.pickOwner && state.pickOwner[pickIdx];
@@ -677,7 +694,7 @@ function picksOwnedBy(ti){
     if(p.teamIdx === ti) made.push({kind:"made", id:i, overall:i+1, p});
   });
   const future = [];
-  for(let k = state.picks.length; k < TOTAL_PICKS; k++){
+  for(let k = state.picks.length; k < totalPicks(); k++){
     if(teamOnPick(k) === ti) future.push({kind:"future", id:k, overall:k+1});
   }
   return {made, future};
@@ -793,8 +810,8 @@ function renderDraft(){
   renderActivity();
 
   const pickIdx = state.picks.length;
-  const done = pickIdx >= TOTAL_PICKS;
-  const round = Math.floor(pickIdx / 4) + 1;
+  const done = pickIdx >= totalPicks();
+  const round = Math.floor(pickIdx / TEAMS.length) + 1;
   const onClock = done ? null : teamOnPick(pickIdx);
   const rem = remainingSeconds();
   const expired = !done && rem <= 0;
@@ -843,7 +860,7 @@ function renderDraft(){
     for(let i = start; i < pickIdx; i++){
       const p = state.picks[i];
       const ti = p.teamIdx;
-      const rnd = Math.floor(i / 4) + 1;
+      const rnd = Math.floor(i / TEAMS.length) + 1;
       const label = p.skipped ? "— skipped —"
         : `<b style="color:var(--text)">${PLAYERS[p.playerIdx][0]}</b>`;
       html += `<div class="pip" style="opacity:.85">
@@ -853,10 +870,10 @@ function renderDraft(){
       </div>`;
     }
     // Current + upcoming
-    for(let k = 0; k < FUTURE && pickIdx + k < TOTAL_PICKS; k++){
+    for(let k = 0; k < FUTURE && pickIdx + k < totalPicks(); k++){
       const idx = pickIdx + k;
       const ti = teamOnPick(idx);
-      const rnd = Math.floor(idx / 4) + 1;
+      const rnd = Math.floor(idx / TEAMS.length) + 1;
       html += `<div class="pip ${k===0?"current":""}">
         <span class="pd" style="background:${dots[ti]}"></span>
         <span>${k===0?"NOW: ":""}${TEAMS[ti].name}</span>
@@ -1156,6 +1173,109 @@ const STATS = {
 };
 function fmtStat(v){ return v == null ? "—" : v.toFixed(1); }
 
+// Best season per player — curated for the most-likely-drafted ~80 stars.
+// Format: [year, ppg, rpg, apg, spg, bpg]. null for steals/blocks pre-1973-74.
+const BEST_SEASON = {
+  "Michael Jordan":          ["1987-88", 35.0, 5.5, 5.9, 3.2, 1.6],
+  "LeBron James":            ["2008-09", 28.4, 7.6, 7.2, 1.7, 1.1],
+  "Kareem Abdul-Jabbar":     ["1971-72", 34.8, 16.6, 4.6, null, null],
+  "Magic Johnson":           ["1986-87", 23.9, 6.3, 12.2, 1.7, 0.5],
+  "Larry Bird":              ["1984-85", 28.7, 10.5, 6.6, 1.6, 1.2],
+  "Bill Russell":            ["1961-62", 18.9, 23.6, 4.5, null, null],
+  "Wilt Chamberlain":        ["1961-62", 50.4, 25.7, 2.4, null, null],
+  "Shaquille O'Neal":        ["1999-2000", 29.7, 13.6, 3.8, 0.5, 3.0],
+  "Tim Duncan":              ["2001-02", 25.5, 12.7, 3.7, 0.7, 2.5],
+  "Kobe Bryant":             ["2005-06", 35.4, 5.3, 4.5, 1.8, 0.4],
+  "Hakeem Olajuwon":         ["1992-93", 26.1, 13.0, 3.5, 1.8, 4.2],
+  "Stephen Curry":           ["2015-16", 30.1, 5.4, 6.7, 2.1, 0.2],
+  "Kevin Durant":            ["2013-14", 32.0, 7.4, 5.5, 1.3, 0.7],
+  "Jerry West":              ["1969-70", 31.2, 4.6, 7.5, null, null],
+  "Oscar Robertson":         ["1961-62", 30.8, 12.5, 11.4, null, null],
+  "Nikola Jokic":            ["2021-22", 27.1, 13.8, 7.9, 1.5, 0.9],
+  "Giannis Antetokounmpo":   ["2019-20", 29.5, 13.6, 5.6, 1.0, 1.0],
+  "Julius Erving":           ["1975-76", 29.3, 11.0, 5.0, 2.5, 1.9],
+  "Karl Malone":             ["1989-90", 31.0, 11.1, 2.8, 1.5, 0.6],
+  "Moses Malone":            ["1981-82", 31.1, 14.7, 1.8, 0.8, 1.5],
+  "David Robinson":          ["1993-94", 29.8, 10.7, 4.8, 1.7, 3.3],
+  "Dirk Nowitzki":           ["2005-06", 26.6, 9.0, 2.8, 0.7, 1.0],
+  "Kevin Garnett":           ["2003-04", 24.2, 13.9, 5.0, 1.5, 2.2],
+  "Charles Barkley":         ["1992-93", 25.6, 12.2, 5.1, 1.6, 1.0],
+  "John Stockton":           ["1989-90", 17.2, 2.7, 14.5, 2.7, 0.2],
+  "Isiah Thomas":            ["1984-85", 21.2, 4.5, 13.9, 2.3, 0.3],
+  "Scottie Pippen":          ["1993-94", 22.0, 8.7, 5.6, 2.9, 0.8],
+  "Dwyane Wade":             ["2008-09", 30.2, 5.0, 7.5, 2.2, 1.3],
+  "Allen Iverson":           ["2005-06", 33.0, 3.2, 7.4, 1.9, 0.1],
+  "Steve Nash":              ["2006-07", 18.6, 3.5, 11.6, 0.8, 0.1],
+  "Patrick Ewing":           ["1989-90", 28.6, 10.9, 2.2, 1.0, 4.0],
+  "Jason Kidd":              ["2002-03", 18.7, 6.3, 8.9, 2.2, 0.2],
+  "Gary Payton":             ["1999-2000", 24.2, 6.5, 8.9, 1.9, 0.2],
+  "Chris Paul":              ["2008-09", 22.8, 5.5, 11.0, 2.8, 0.1],
+  "James Harden":            ["2018-19", 36.1, 6.6, 7.5, 2.0, 0.7],
+  "Russell Westbrook":       ["2016-17", 31.6, 10.7, 10.4, 1.6, 0.4],
+  "Dwight Howard":           ["2010-11", 22.9, 14.1, 1.4, 1.4, 2.4],
+  "Paul Pierce":             ["2005-06", 26.8, 6.7, 4.7, 1.4, 0.6],
+  "Ray Allen":               ["2001-02", 21.8, 4.5, 4.6, 1.4, 0.4],
+  "Reggie Miller":           ["1989-90", 24.6, 3.6, 3.8, 1.1, 0.2],
+  "Clyde Drexler":           ["1988-89", 27.2, 7.9, 5.8, 2.7, 0.7],
+  "Joel Embiid":             ["2022-23", 33.1, 10.2, 4.2, 1.0, 1.7],
+  "Anthony Davis":           ["2017-18", 28.1, 11.1, 2.3, 1.5, 2.6],
+  "Damian Lillard":          ["2019-20", 30.0, 4.3, 8.0, 1.1, 0.3],
+  "Kawhi Leonard":           ["2016-17", 25.5, 5.8, 3.5, 1.8, 0.7],
+  "Paul George":             ["2018-19", 28.0, 8.2, 4.1, 2.2, 0.4],
+  "Luka Doncic":             ["2022-23", 32.4, 8.6, 8.0, 1.4, 0.5],
+  "Jayson Tatum":            ["2022-23", 30.1, 8.8, 4.6, 1.1, 0.7],
+  "Devin Booker":            ["2021-22", 26.8, 5.0, 4.8, 1.1, 0.4],
+  "Donovan Mitchell":        ["2022-23", 28.3, 4.3, 4.4, 1.5, 0.4],
+  "Klay Thompson":           ["2015-16", 22.1, 3.8, 2.1, 0.8, 0.6],
+  "Bradley Beal":            ["2020-21", 31.3, 4.7, 4.4, 1.2, 0.4],
+  "Kyrie Irving":            ["2018-19", 23.8, 5.0, 6.9, 1.5, 0.5],
+  "Shai Gilgeous-Alexander": ["2023-24", 30.1, 5.5, 6.2, 2.0, 0.9],
+  "Victor Wembanyama":       ["2023-24", 21.4, 10.6, 3.9, 1.2, 3.6],
+  "Anthony Edwards":         ["2023-24", 25.9, 5.4, 5.1, 1.3, 0.5],
+  "Tyrese Haliburton":       ["2022-23", 20.7, 3.7, 10.4, 1.6, 0.4],
+  "Ja Morant":               ["2022-23", 26.2, 5.9, 8.1, 1.1, 0.3],
+  "Trae Young":              ["2021-22", 28.4, 3.7, 9.7, 1.0, 0.1],
+  "Zion Williamson":         ["2020-21", 27.0, 7.2, 3.7, 0.9, 0.6],
+  "Paolo Banchero":          ["2023-24", 22.6, 6.9, 5.4, 0.9, 0.6],
+  "Blake Griffin":           ["2013-14", 24.1, 9.5, 3.9, 1.2, 0.6],
+  "LaMarcus Aldridge":       ["2013-14", 23.2, 11.1, 2.6, 0.9, 1.0],
+  "Tracy McGrady":           ["2002-03", 32.1, 6.5, 5.5, 1.7, 0.8],
+  "Vince Carter":            ["2000-01", 27.6, 5.5, 3.9, 1.5, 1.1],
+  "Carmelo Anthony":         ["2012-13", 28.7, 6.9, 2.6, 0.8, 0.5],
+  "Chris Bosh":              ["2009-10", 24.0, 10.8, 2.4, 0.6, 1.0],
+  "Pau Gasol":               ["2010-11", 18.8, 10.2, 3.3, 0.6, 1.6],
+  "Yao Ming":                ["2005-06", 22.3, 10.2, 1.5, 0.4, 1.6],
+  "Manu Ginobili":           ["2007-08", 19.5, 4.8, 4.5, 1.5, 0.4],
+  "Tony Parker":             ["2008-09", 22.0, 3.1, 6.9, 0.9, 0.1],
+  "Penny Hardaway":          ["1995-96", 21.7, 4.3, 7.1, 2.0, 0.5],
+  "Grant Hill":              ["1999-2000", 25.8, 6.6, 5.2, 1.4, 0.6],
+  "Chris Webber":            ["2000-01", 27.1, 11.1, 4.2, 1.5, 1.7],
+  "Alonzo Mourning":         ["1999-2000", 21.7, 9.5, 1.6, 0.5, 3.7],
+  "Tim Hardaway":            ["1991-92", 23.4, 3.8, 10.0, 2.0, 0.2],
+  "Kevin Johnson":           ["1990-91", 22.2, 3.4, 10.1, 2.0, 0.3],
+  "Mitch Richmond":          ["1996-97", 25.9, 4.2, 4.4, 1.4, 0.2],
+  "Pete Maravich":           ["1976-77", 31.1, 5.1, 5.4, 1.4, 0.4],
+  "George Gervin":           ["1979-80", 33.1, 5.1, 3.1, 1.3, 1.0],
+  "Dominique Wilkins":       ["1985-86", 30.3, 7.9, 2.6, 1.7, 0.6],
+  "Elgin Baylor":            ["1961-62", 38.3, 18.6, 4.6, null, null],
+  "Walt Frazier":            ["1971-72", 23.2, 6.7, 7.1, null, null],
+  "Bernard King":            ["1984-85", 32.9, 5.2, 3.7, 1.3, 0.4],
+  "Adrian Dantley":          ["1983-84", 30.6, 5.7, 3.9, 1.0, 0.1],
+  "Dennis Rodman":           ["1991-92", 9.8, 18.7, 2.3, 0.8, 0.7],
+  "Robert Parish":           ["1981-82", 19.9, 10.8, 1.8, 0.7, 2.4],
+  "Kevin McHale":            ["1986-87", 26.1, 9.9, 2.6, 0.4, 2.2],
+  "James Worthy":            ["1986-87", 19.4, 5.7, 2.8, 1.0, 0.7],
+  "Bill Walton":             ["1976-77", 18.6, 14.4, 3.8, 1.0, 3.2],
+  "Dave Cowens":             ["1972-73", 20.5, 16.2, 4.1, 1.1, 1.1],
+  "Bob Pettit":              ["1961-62", 31.1, 18.7, 3.7, null, null],
+  "Rick Barry":              ["1966-67", 35.6, 9.2, 3.6, null, null],
+  "Jaylen Brown":            ["2022-23", 26.6, 6.9, 3.5, 1.1, 0.4],
+  "Bam Adebayo":             ["2022-23", 20.4, 9.2, 3.2, 1.2, 0.8],
+  "Karl-Anthony Towns":      ["2017-18", 21.3, 12.3, 2.4, 0.8, 1.4],
+  "Pascal Siakam":           ["2019-20", 22.9, 7.3, 3.5, 1.0, 0.9],
+  "Domantas Sabonis":        ["2022-23", 19.1, 12.3, 7.3, 0.7, 0.6],
+};
+
 const wikiCache = {};
 // Disambiguation overrides for names that don't resolve cleanly on Wikipedia.
 const WIKI_OVERRIDES = {
@@ -1251,7 +1371,8 @@ async function openPlayerInfo(playerIdx){
        </div>`
     : "";
   const statsBlock = stats
-    ? `<div class="stats-grid">
+    ? `<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:8px">Career Averages</div>
+       <div class="stats-grid">
          <div class="stat"><div class="v">${stats[0]}</div><div class="l">Seasons</div></div>
          <div class="stat"><div class="v">${fmtStat(stats[1])}</div><div class="l">PPG</div></div>
          <div class="stat"><div class="v">${fmtStat(stats[2])}</div><div class="l">RPG</div></div>
@@ -1260,12 +1381,24 @@ async function openPlayerInfo(playerIdx){
          <div class="stat"><div class="v">${fmtStat(stats[5])}</div><div class="l">BPG</div></div>
        </div>`
     : "";
+  const bs = BEST_SEASON[name];
+  const bestBlock = bs
+    ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-top:10px">⭐ Best Season — ${bs[0]}</div>
+       <div class="stats-grid">
+         <div class="stat"><div class="v">${fmtStat(bs[1])}</div><div class="l">PPG</div></div>
+         <div class="stat"><div class="v">${fmtStat(bs[2])}</div><div class="l">RPG</div></div>
+         <div class="stat"><div class="v">${fmtStat(bs[3])}</div><div class="l">APG</div></div>
+         <div class="stat"><div class="v">${fmtStat(bs[4])}</div><div class="l">SPG</div></div>
+         <div class="stat" style="grid-column:span 2"><div class="v">${fmtStat(bs[5])}</div><div class="l">BPG</div></div>
+       </div>`
+    : "";
   showPlayerModal(`
     <div class="photo" id="pcardPhoto">Loading photo…</div>
     <div class="pname">${name}</div>
     <div class="pmeta">${pos}</div>
     ${funBlock}
     ${statsBlock}
+    ${bestBlock}
     <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>
   `);
   document.getElementById("pcardClose").onclick = closePlayerModal;
@@ -1321,7 +1454,7 @@ function openTradePicker(fromTeam, toTeam){
   function renderPick(side, item){
     const label = item.kind === "made"
       ? `${PLAYERS[item.p.playerIdx][0]} <span class="pp-meta">#${item.overall}</span>`
-      : `Round ${Math.floor((item.id)/4)+1} pick <span class="pp-meta">#${item.overall}</span>`;
+      : `Round ${Math.floor((item.id)/TEAMS.length)+1} pick <span class="pp-meta">#${item.overall}</span>`;
     const key = pickKey(side, item.kind, item.id);
     const sel = selected[side].has(key);
     return `<div class="pick-pick ${sel?"sel":""}" data-key="${key}">
@@ -1400,11 +1533,11 @@ function applyPendingTrade(){
     fromLabels: t.fromPicks.map(p =>
       p.kind === "made"
         ? PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`
-        : `R${Math.floor(p.id/4)+1} pick #${p.id+1}`),
+        : `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`),
     toLabels: t.toPicks.map(p =>
       p.kind === "made"
         ? PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`
-        : `R${Math.floor(p.id/4)+1} pick #${p.id+1}`),
+        : `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`),
   };
   state.tradeHistory = state.tradeHistory || [];
   state.tradeHistory.push(snap);
@@ -1430,7 +1563,7 @@ function renderTradeBanner(){
   if(!t){ el.innerHTML = ""; return; }
   const describe = (arr) => arr.length === 0 ? "(nothing)" : arr.map(p => {
     if(p.kind === "made") return PLAYERS[state.picks[p.id]?.playerIdx]?.[0] || `pick #${p.id+1}`;
-    return `R${Math.floor(p.id/4)+1} pick #${p.id+1}`;
+    return `R${Math.floor(p.id/TEAMS.length)+1} pick #${p.id+1}`;
   }).join(", ");
   const canAccept = canActAsTeam(t.to);   // receiver or admin
   const canCancel = canActAsTeam(t.from) || isAdmin();
@@ -1501,10 +1634,11 @@ document.getElementById("resetAll").onclick = () => {
   if(!isAdmin() && !inMockMode){ alert("Only admin can reset the live draft."); return; }
   if(!confirm("Reset the entire draft? This clears picks and order.")) return;
   if(inMockMode){
-    // Re-roll fresh mock with same role
-    const shuffled = [0,1,2,3].sort(() => Math.random() - 0.5);
+    const n = TEAMS.length;
+    const shuffled = Array.from({length:n}, (_,i) => i).sort(() => Math.random() - 0.5);
     state = {...DEFAULT_STATE, order: shuffled, started: true, pickStartedAt: Date.now(),
-      pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[]};
+      pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[], teamCount:n,
+      tradeHistory:[]};
     saveLocal(); render(); scheduleAIPick();
   } else {
     state = {...DEFAULT_STATE, filterPos: state.filterPos, search: state.search};
@@ -1531,7 +1665,7 @@ document.getElementById("skipPickBtn").onclick = () => {
 document.getElementById("historyBtn").onclick = () => {
   const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
   const rows = state.picks.map((p,i) => {
-    const rnd = Math.floor(i/4)+1;
+    const rnd = Math.floor(i/TEAMS.length)+1;
     const label = p.skipped ? "— skipped —"
       : `<b>${PLAYERS[p.playerIdx][0]}</b> <span style="color:var(--muted)">(${PLAYERS[p.playerIdx][1]})</span>`;
     return `<div class="h-row">
@@ -1633,7 +1767,7 @@ function renderActivity(){
   feedEl.innerHTML = items.map(it => {
     if(it.type === "pick"){
       const p = it.p;
-      const rnd = Math.floor(it.pickIdx/4)+1;
+      const rnd = Math.floor(it.pickIdx/TEAMS.length)+1;
       const label = p.skipped ? `<i>skipped</i>` :
         `<b>${PLAYERS[p.playerIdx][0]}</b> <span style="color:var(--muted)">(${PLAYERS[p.playerIdx][1]})</span>`;
       return `<div class="act pick">
@@ -1672,28 +1806,49 @@ function renderActivity(){
 // ---- Mock draft ----
 document.getElementById("mockBtn").onclick = () => {
   if(inMockMode){ exitMock(); return; }
-  // Ask which team to be
-  let html = `<h3>Mock Draft (Solo)</h3>
-    <p style="font-size:13px;color:var(--muted)">Pick which team you'll draft for. The other 3 will auto-pick the best available player. Nothing here syncs to the real draft.</p>`;
+  // Step 1: pick team count
+  let html = `<h3>Mock Draft — How many teams?</h3>
+    <p style="font-size:13px;color:var(--muted)">Choose your league size. 4 is the real-draft size; 5–10 are mock-only fun.</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0">`;
+  for(let n = 4; n <= 10; n++){
+    html += `<button class="btn" data-mockN="${n}" style="padding:14px;font-size:16px;font-weight:600">${n}</button>`;
+  }
+  html += `</div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="mockCancel">Cancel</button></div>`;
+  showPlayerModal(html);
+  document.getElementById("mockCancel").onclick = closePlayerModal;
+  document.querySelectorAll("[data-mockN]").forEach(b => {
+    b.onclick = () => mockChooseTeam(parseInt(b.dataset.mockN, 10));
+  });
+};
+function mockChooseTeam(n){
+  setTeamCount(n);
+  let html = `<h3>Mock Draft — Pick your team (${n})</h3>
+    <p style="font-size:13px;color:var(--muted)">The other ${n-1} will auto-pick the best available player.</p>`;
   TEAMS.forEach((t,i) => {
     html += `<button class="team-pick" data-mock="${i}">${t.name} — ${t.owner}</button>`;
   });
-  html += `<div class="row" style="justify-content:flex-end"><button class="btn" id="mockCancel">Cancel</button></div>`;
+  html += `<div class="row" style="justify-content:flex-end">
+    <button class="btn" id="mockBack">Back</button>
+    <button class="btn" id="mockCancel">Cancel</button></div>`;
   showPlayerModal(html);
-  document.getElementById("mockCancel").onclick = closePlayerModal;
+  document.getElementById("mockBack").onclick = () => document.getElementById("mockBtn").click();
+  document.getElementById("mockCancel").onclick = () => { setTeamCount(4); closePlayerModal(); };
   document.querySelectorAll("[data-mock]").forEach(b => {
-    b.onclick = () => { enterMock(parseInt(b.dataset.mock, 10)); closePlayerModal(); };
+    b.onclick = () => { enterMock(parseInt(b.dataset.mock, 10), n); closePlayerModal(); };
   });
-};
-function enterMock(teamIdx){
+}
+function enterMock(teamIdx, teamCount){
   inMockMode = true;
   localStorage.setItem(MODE_KEY, "mock");
+  setTeamCount(teamCount || 4);
   role = String(teamIdx);
   localStorage.setItem(ROLE_KEY, role);
-  // Fresh mock state with random order, started
-  const shuffled = [0,1,2,3].sort(() => Math.random() - 0.5);
+  const n = TEAMS.length;
+  const shuffled = Array.from({length:n}, (_,i) => i).sort(() => Math.random() - 0.5);
   state = {...DEFAULT_STATE, order: shuffled, started: true, pickStartedAt: Date.now(),
-    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[]};
+    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[], teamCount:n,
+    tradeHistory:[]};
   saveLocal();
   render();
   scheduleAIPick();
@@ -1703,18 +1858,19 @@ function exitMock(){
   localStorage.removeItem(STORAGE_KEY_MOCK);
   inMockMode = false;
   localStorage.setItem(MODE_KEY, "real");
+  setTeamCount(4);
   state = loadLocal() || {...DEFAULT_STATE};
-  // Drop role so we return to home screen
   role = null;
   localStorage.removeItem(ROLE_KEY);
   render();
 }
 function restartMock(){
   if(!confirm("Restart mock draft? Current mock progress will be cleared.")) return;
-  const teamIdx = parseInt(role, 10);
-  const shuffled = [0,1,2,3].sort(() => Math.random() - 0.5);
+  const n = TEAMS.length;
+  const shuffled = Array.from({length:n}, (_,i) => i).sort(() => Math.random() - 0.5);
   state = {...DEFAULT_STATE, order: shuffled, started: true, pickStartedAt: Date.now(),
-    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[]};
+    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[], teamCount:n,
+    tradeHistory:[]};
   saveLocal(); render(); scheduleAIPick();
 }
 // Hand-ranked top 150 — consensus all-time greats + current stars, ordered by overall value.
@@ -1894,7 +2050,7 @@ function scheduleAIPick(){
   clearTimeout(aiTimer);
   if(state.pendingTrade) return;            // wait for trade to resolve
   const pickIdx = state.picks.length;
-  if(pickIdx >= TOTAL_PICKS) return;
+  if(pickIdx >= totalPicks()) return;
   const onClock = teamOnPick(pickIdx);
   if(onClock === parseInt(role, 10)) return; // human's turn — wait
   aiTimer = setTimeout(() => {
@@ -1913,7 +2069,7 @@ function scheduleAIPick(){
 
 // Timer tick — re-render once per second to update countdown
 setInterval(() => {
-  if(state.started && state.picks.length < TOTAL_PICKS) render();
+  if(state.started && state.picks.length < totalPicks()) render();
 }, 1000);
 document.getElementById("posFilter").onchange = (e) => {
   state.filterPos = e.target.value; save(); renderDraft();
