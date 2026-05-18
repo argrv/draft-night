@@ -119,6 +119,13 @@
   .pick-pick input{margin:0;flex-shrink:0}
   .pick-pick .pp-meta{color:var(--muted);font-size:11px;margin-left:auto}
   .trade-list{max-height:38vh;overflow-y:auto}
+  .star{font-size:16px;background:transparent;border:0;cursor:pointer;padding:2px 4px;
+    color:#5a6478;flex-shrink:0}
+  .star.on{color:#ffb020}
+  .star:hover{color:#ffb020}
+  .targets-btn{font-size:13px;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);padding:9px 10px;border-radius:10px;cursor:pointer}
+  .targets-btn.on{background:#3a2c0a;border-color:var(--accent);color:var(--accent)}
   .pcard{max-width:480px}
   .pcard .photo{width:100%;background:#0f1320;border-radius:10px;margin-bottom:10px;
     display:flex;align-items:center;justify-content:center;
@@ -202,6 +209,7 @@
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Available Players</h2>
           <div class="row">
+            <button class="targets-btn" id="targetsBtn" title="Show only my target list">⭐</button>
             <select id="posFilter">
               <option value="ALL">All Positions</option>
               <option value="PG">PG</option>
@@ -412,7 +420,9 @@ const DEFAULT_STATE = {
   pickStartedAt: 0,      // ms timestamp (shared)
   pickOwner: {},         // {overallPickIdx: teamIdx} — overrides snake order
   pendingTrade: null,    // {from, to, fromPicks:[{kind,id}], toPicks:[...], at}
+  targets: {},           // { teamIdxStr: [playerIdx, ...] } — per-team target lists
 };
+let showTargetsOnly = false; // local UI toggle
 
 let state = loadLocal() || {...DEFAULT_STATE};
 let role = localStorage.getItem(ROLE_KEY); // "admin" | "0".."3" | null
@@ -512,6 +522,7 @@ async function save(){
       pickStartedAt: state.pickStartedAt || 0,
       pickOwner: state.pickOwner || {},
       pendingTrade: state.pendingTrade || null,
+      targets: state.targets || {},
       updatedAt: Date.now(),
     });
   } catch(e){ console.warn("Firestore write failed:", e); }
@@ -526,6 +537,7 @@ onSnapshot(DRAFT_DOC, (snap) => {
   state.pickStartedAt = d.pickStartedAt ?? state.pickStartedAt;
   state.pickOwner = d.pickOwner ?? state.pickOwner ?? {};
   state.pendingTrade = d.pendingTrade ?? null;
+  state.targets = d.targets ?? state.targets ?? {};
   saveLocal();
   render();
 }, (err) => console.warn("Firestore subscribe failed:", err));
@@ -546,6 +558,28 @@ function fmtTime(s){
   if(s < 0) s = 0;
   const m = Math.floor(s/60), ss = s%60;
   return `${m}:${ss.toString().padStart(2,"0")}`;
+}
+
+// ---- Target lists ----
+function myTargets(){
+  const ti = myTeamIdx();
+  if(ti === null) return null; // admin has no list
+  return state.targets?.[String(ti)] || [];
+}
+function isTargeted(playerIdx){
+  const list = myTargets();
+  return list && list.includes(playerIdx);
+}
+function toggleTarget(playerIdx){
+  const ti = myTeamIdx();
+  if(ti === null) return;
+  const key = String(ti);
+  state.targets = state.targets || {};
+  const list = state.targets[key] || [];
+  const i = list.indexOf(playerIdx);
+  if(i >= 0) list.splice(i, 1); else list.push(playerIdx);
+  state.targets[key] = list;
+  save();
 }
 
 // Snake order generator (with trade overrides)
@@ -739,14 +773,26 @@ function renderDraft(){
   const q = state.search.toLowerCase().trim();
   const canIPick = !done && !expired && canPickFor(onClock);
   let shown = 0;
+  const canStar = myTeamIdx() !== null; // admin has no list
+  document.getElementById("targetsBtn").style.display = canStar ? "" : "none";
+  document.getElementById("targetsBtn").classList.toggle("on", showTargetsOnly);
   PLAYERS.forEach((p,i) => {
     if(takenIdx.has(i)) return;
     if(state.filterPos !== "ALL" && !p[1].split("/").includes(state.filterPos)) return;
     if(q && !p[0].toLowerCase().includes(q)) return;
+    if(showTargetsOnly && !isTargeted(i)) return;
     const el = document.createElement("div");
     el.className = "player" + (canIPick ? "" : " locked");
-    el.innerHTML = `<span class="nm">${p[0]}</span><span class="pos">${p[1]}</span>`;
-    el.onclick = () => {
+    const starHTML = canStar
+      ? `<button class="star ${isTargeted(i)?"on":""}" data-star="${i}" title="Add to target list">${isTargeted(i)?"★":"☆"}</button>`
+      : "";
+    el.innerHTML = `<span class="nm">${p[0]}</span>${starHTML}<span class="pos">${p[1]}</span>`;
+    el.onclick = (e) => {
+      if(e.target.dataset.star !== undefined){
+        toggleTarget(parseInt(e.target.dataset.star, 10));
+        renderDraft();
+        return;
+      }
       if(!canIPick) return;
       openConfirmPick(i, onClock);
     };
@@ -1319,6 +1365,12 @@ setInterval(() => {
 }, 1000);
 document.getElementById("posFilter").onchange = (e) => {
   state.filterPos = e.target.value; save(); renderDraft();
+};
+document.getElementById("targetsBtn").onclick = () => {
+  if(myTeamIdx() === null){ alert("Admin doesn't have a target list — switch to a team to use this."); return; }
+  showTargetsOnly = !showTargetsOnly;
+  document.getElementById("targetsBtn").classList.toggle("on", showTargetsOnly);
+  renderDraft();
 };
 document.getElementById("search").oninput = (e) => {
   state.search = e.target.value; renderDraft();
