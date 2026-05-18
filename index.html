@@ -95,6 +95,17 @@
   .player.locked{opacity:.55;cursor:not-allowed}
   .player.locked:hover{background:var(--panel2)}
   .skipped{color:var(--muted);font-style:italic}
+  .pcard{max-width:480px}
+  .pcard .photo{width:100%;height:240px;background:#0f1320 center/cover no-repeat;
+    border-radius:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:14px}
+  .pcard .pname{font-size:20px;font-weight:700;margin:0 0 2px}
+  .pcard .pmeta{font-size:12px;color:var(--muted);margin-bottom:10px}
+  .pcard .bio{font-size:13.5px;line-height:1.45;max-height:200px;overflow:auto;
+    background:var(--panel2);padding:10px;border-radius:10px;border:1px solid var(--line)}
+  .pcard .row{margin-top:10px;justify-content:flex-end}
+  .confirm-q{font-size:16px;margin:6px 0 12px}
+  .confirm-q b{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -179,6 +190,10 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="modal" id="playerModal">
+  <div class="box pcard" id="playerModalBox"></div>
 </div>
 
 <div class="modal" id="teamModal">
@@ -650,10 +665,7 @@ function renderDraft(){
     el.innerHTML = `<span class="nm">${p[0]}</span><span class="pos">${p[1]}</span>`;
     el.onclick = () => {
       if(!canIPick) return;
-      state.picks.push({playerIdx:i, teamIdx:onClock});
-      state.pickStartedAt = Date.now();
-      playPickSound();
-      save(); render();
+      openConfirmPick(i, onClock);
     };
     list.appendChild(el);
     shown++;
@@ -692,7 +704,118 @@ function renderDraft(){
   });
 }
 
-// Modal
+// ---- Player modals (confirm + info) ----
+const wikiCache = {};
+// Disambiguation overrides for names that don't resolve cleanly on Wikipedia.
+const WIKI_OVERRIDES = {
+  "Larry Johnson": "Larry Johnson (basketball, born 1969)",
+  "Mark Jackson": "Mark Jackson (basketball)",
+  "Steve Smith": "Steve Smith (basketball)",
+  "Eddie Jones": "Eddie Jones (basketball)",
+  "Glen Rice": "Glen Rice",
+  "Jerry Lucas": "Jerry Lucas",
+  "Bill Bradley": "Bill Bradley",
+  "Sam Jones": "Sam Jones (basketball)",
+  "Stephen Jackson": "Stephen Jackson (basketball)",
+  "Kevin Johnson": "Kevin Johnson",
+  "Kevin Martin": "Kevin Martin (basketball)",
+  "Larry Nance": "Larry Nance",
+  "Mike Bibby": "Mike Bibby",
+  "Mark Price": "Mark Price (basketball)",
+  "Brandon Miller": "Brandon Miller (basketball, born 2002)",
+  "Cameron Johnson": "Cameron Johnson (basketball)",
+  "Jalen Williams": "Jalen Williams",
+  "Jalen Green": "Jalen Green",
+  "Tim Hardaway": "Tim Hardaway",
+  "Bobby Jones": "Bobby Jones (basketball, born 1951)",
+  "Calvin Murphy": "Calvin Murphy",
+  "Dave Bing": "Dave Bing",
+  "Penny Hardaway": "Penny Hardaway",
+  "Metta World Peace": "Metta Sandiford-Artest",
+};
+
+async function fetchWiki(name){
+  if(wikiCache[name]) return wikiCache[name];
+  const title = WIKI_OVERRIDES[name] || name;
+  try {
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g,"_"))}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const out = {
+      extract: d.extract || "",
+      image: d.thumbnail?.source || d.originalimage?.source || null,
+      url: d.content_urls?.desktop?.page || null,
+    };
+    wikiCache[name] = out;
+    return out;
+  } catch(e){
+    return wikiCache[name] = { extract: "", image: null, url: null };
+  }
+}
+
+function showPlayerModal(html){
+  const box = document.getElementById("playerModalBox");
+  box.innerHTML = html;
+  document.getElementById("playerModal").classList.add("show");
+}
+function closePlayerModal(){
+  document.getElementById("playerModal").classList.remove("show");
+}
+document.getElementById("playerModal").onclick = (e) => {
+  if(e.target.id === "playerModal") closePlayerModal();
+};
+
+function openConfirmPick(playerIdx, teamIdx){
+  const [name, pos] = PLAYERS[playerIdx];
+  showPlayerModal(`
+    <h3 style="margin:0 0 6px">Confirm Pick</h3>
+    <div class="confirm-q">Draft <b>${name}</b> (${pos}) to <b>${TEAMS[teamIdx].name}</b>?</div>
+    <div class="row" style="justify-content:flex-end;gap:8px">
+      <button class="btn" id="confirmCancel">Cancel</button>
+      <button class="btn primary" id="confirmOk">Confirm</button>
+    </div>
+  `);
+  document.getElementById("confirmCancel").onclick = closePlayerModal;
+  document.getElementById("confirmOk").onclick = () => {
+    // Commit pick — recheck on-the-clock in case state changed
+    const pickIdx = state.picks.length;
+    const onClock = teamOnPick(pickIdx);
+    if(onClock !== teamIdx){ closePlayerModal(); render(); return; }
+    state.picks.push({playerIdx, teamIdx: onClock});
+    state.pickStartedAt = Date.now();
+    playPickSound();
+    save(); render();
+    openPlayerInfo(playerIdx);
+  };
+}
+
+async function openPlayerInfo(playerIdx){
+  const [name, pos] = PLAYERS[playerIdx];
+  showPlayerModal(`
+    <div class="photo" id="pcardPhoto">Loading photo…</div>
+    <div class="pname">${name}</div>
+    <div class="pmeta">${pos}</div>
+    <div class="bio" id="pcardBio">Loading bio from Wikipedia…</div>
+    <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>
+  `);
+  document.getElementById("pcardClose").onclick = closePlayerModal;
+  const info = await fetchWiki(name);
+  const photoEl = document.getElementById("pcardPhoto");
+  if(!photoEl) return; // user already closed
+  if(info.image){
+    photoEl.style.backgroundImage = `url("${info.image}")`;
+    photoEl.textContent = "";
+  } else {
+    photoEl.textContent = "No photo available";
+  }
+  const bioEl = document.getElementById("pcardBio");
+  if(bioEl){
+    bioEl.textContent = info.extract ||
+      "No bio available — Wikipedia didn't return a summary for this player.";
+  }
+}
+
+// ---- Team modal (order setup) ----
 function openTeamModal(title, cb){
   document.getElementById("modalTitle").textContent = title;
   const wrap = document.getElementById("modalTeams");
