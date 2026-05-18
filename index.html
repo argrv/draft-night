@@ -1613,14 +1613,75 @@ function exitMock(){
   state = loadLocal() || {...DEFAULT_STATE};
   render();
 }
-// Simple ranking by PPG for AI; fallback to PLAYERS list order
-function bestAvailable(){
+// Hand-ranked top 150 — consensus all-time greats + current stars, ordered by overall value.
+const RANK_LIST = [
+  "Michael Jordan","LeBron James","Kareem Abdul-Jabbar","Bill Russell","Magic Johnson",
+  "Larry Bird","Wilt Chamberlain","Tim Duncan","Shaquille O'Neal","Kobe Bryant",
+  "Hakeem Olajuwon","Stephen Curry","Kevin Durant","Oscar Robertson","Jerry West",
+  "Nikola Jokic","Giannis Antetokounmpo","Julius Erving","Karl Malone","Moses Malone",
+  "David Robinson","Charles Barkley","Kevin Garnett","Dirk Nowitzki","Scottie Pippen",
+  "John Stockton","Isiah Thomas","Allen Iverson","Patrick Ewing","Steve Nash",
+  "Jason Kidd","Dwyane Wade","Chris Paul","Gary Payton","James Harden",
+  "Russell Westbrook","Joel Embiid","Luka Doncic","Anthony Davis","Kawhi Leonard",
+  "Damian Lillard","Paul Pierce","Ray Allen","Reggie Miller","Clyde Drexler",
+  "Dwight Howard","Elgin Baylor","George Mikan","Bob Cousy","Pete Maravich",
+  "Rick Barry","Bob Pettit","John Havlicek","Willis Reed","Wes Unseld",
+  "Walt Frazier","Robert Parish","Kevin McHale","James Worthy","Bill Walton",
+  "Dave Cowens","Dennis Rodman","Dominique Wilkins","George Gervin","Tracy McGrady",
+  "Vince Carter","Carmelo Anthony","Jayson Tatum","Devin Booker","Donovan Mitchell",
+  "Jimmy Butler","Paul George","Kyrie Irving","Klay Thompson","Draymond Green",
+  "Bradley Beal","Shai Gilgeous-Alexander","Anthony Edwards","Victor Wembanyama","Tyrese Haliburton",
+  "Ja Morant","Trae Young","Zion Williamson","Pau Gasol","Manu Ginobili",
+  "Tony Parker","Yao Ming","Chris Bosh","Tim Hardaway","Kevin Johnson",
+  "Mitch Richmond","Dolph Schayes","Bernard King","Adrian Dantley","Alex English",
+  "Earl Monroe","Nate Archibald","Sidney Moncrief","Dikembe Mutombo","Alonzo Mourning",
+  "Bob McAdoo","Walt Bellamy","Nate Thurmond","Jerry Lucas","Hal Greer",
+  "Sam Jones","Billy Cunningham","Chris Webber","Grant Hill","Penny Hardaway",
+  "Shawn Marion","Ben Wallace","Rasheed Wallace","Artis Gilmore","Connie Hawkins",
+  "David Thompson","Spencer Haywood","Drazen Petrovic","Amar'e Stoudemire","Blake Griffin",
+  "LaMarcus Aldridge","Pascal Siakam","Karl-Anthony Towns","Bam Adebayo","Domantas Sabonis",
+  "Lauri Markkanen","Jrue Holiday","Khris Middleton","DeMar DeRozan","Mike Conley",
+  "Jaylen Brown","Paolo Banchero","Chet Holmgren","Evan Mobley","Scottie Barnes",
+  "Franz Wagner","Jalen Brunson","Cade Cunningham","Mikal Bridges","Bob Lanier",
+  "Dave Bing","Elvin Hayes","Gail Goodrich","Calvin Murphy","Lou Hudson",
+  "Joe Dumars","Bill Laimbeer","Dennis Johnson","Maurice Cheeks","Larry Nance",
+];
+const RANK_MAP = {};
+RANK_LIST.forEach((n, i) => RANK_MAP[n] = i + 1);
+
+function positionCounts(teamIdx){
+  const c = {PG:0, SG:0, SF:0, PF:0, C:0};
+  state.picks.forEach(p => {
+    if(p.skipped || p.teamIdx !== teamIdx) return;
+    const primary = PLAYERS[p.playerIdx][1].split("/")[0];
+    if(c[primary] !== undefined) c[primary]++;
+  });
+  return c;
+}
+
+// Smarter AI: ranked-tier base score + positional-need bonus + small randomness.
+function smartAIPick(teamIdx){
   const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => p.playerIdx));
-  let best = null, bestScore = -1;
-  PLAYERS.forEach((p,i) => {
+  const counts = positionCounts(teamIdx);
+  let best = null, bestScore = -Infinity;
+  PLAYERS.forEach((p, i) => {
     if(takenIdx.has(i)) return;
-    const st = STATS[p[0]];
-    const score = st ? st[1] + 0.5*st[3] + 0.3*st[2] : (300 - i) * 0.01; // PPG + half APG + 0.3 RPG; fallback to list order
+    const rank = RANK_MAP[p[0]] || 250;
+    const baseScore = Math.max(0, 200 - rank); // top-ranked players score ~199, fringe ~0
+    // Position-need bonus: best of player's listed positions
+    const positions = p[1].split("/");
+    let bonus = -Infinity;
+    positions.forEach(pos => {
+      const ct = counts[pos] || 0;
+      let b;
+      if(ct === 0) b = 25;
+      else if(ct === 1) b = 12;
+      else if(ct === 2) b = 3;
+      else if(ct === 3) b = -10;
+      else b = -25;
+      if(b > bonus) bonus = b;
+    });
+    const score = baseScore + bonus + Math.random() * 4;
     if(score > bestScore){ bestScore = score; best = i; }
   });
   return best;
@@ -1634,7 +1695,7 @@ function scheduleAIPick(){
   const onClock = teamOnPick(pickIdx);
   if(onClock === parseInt(role, 10)) return; // human's turn — wait
   aiTimer = setTimeout(() => {
-    const idx = bestAvailable();
+    const idx = smartAIPick(onClock);
     if(idx === null) return;
     state.picks.push({playerIdx: idx, teamIdx: onClock});
     state.pickStartedAt = Date.now();
