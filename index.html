@@ -864,9 +864,15 @@ function renderDraft(){
       </div>`;
     }
     up.innerHTML = html;
-    // Auto-scroll so the "NOW" pip is visible
-    const cur = up.querySelector(".pip.current");
-    if(cur) cur.scrollIntoView({inline:"center", block:"nearest", behavior:"instant"});
+    // Center the current pip — only when the pick actually changes, and only
+    // adjust horizontal scroll of the strip (never the page).
+    if(up.dataset.lastPick !== String(pickIdx)){
+      up.dataset.lastPick = String(pickIdx);
+      const cur = up.querySelector(".pip.current");
+      if(cur){
+        up.scrollLeft = cur.offsetLeft - (up.clientWidth - cur.offsetWidth) / 2;
+      }
+    }
   }
 
   // expired banner
