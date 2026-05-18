@@ -937,6 +937,7 @@ function renderDraft(){
 
   // teams
   renderTradeBanner();
+  if(inMockMode) maybeCpuRespondToTrade();
   const teamsEl = document.getElementById("teams");
   teamsEl.innerHTML = "";
   TEAMS.forEach((t,ti) => {
@@ -1406,8 +1407,12 @@ function renderTradeBanner(){
   }).join(", ");
   const canAccept = canActAsTeam(t.to);   // receiver or admin
   const canCancel = canActAsTeam(t.from) || isAdmin();
+  const title = t.counter ? "↩️ Counter Offer" : "🔁 Pending Trade";
+  const waitMsg = inMockMode
+    ? `🤖 ${TEAMS[t.to].name} is thinking…`
+    : `Waiting for ${TEAMS[t.to].name} to respond…`;
   el.innerHTML = `<div class="trade-banner">
-    <h3>🔁 Pending Trade</h3>
+    <h3>${title}</h3>
     <div style="font-size:13px;line-height:1.5">
       <b>${TEAMS[t.from].name}</b> sends: ${describe(t.fromPicks)}<br>
       <b>${TEAMS[t.to].name}</b> sends: ${describe(t.toPicks)}
@@ -1416,7 +1421,7 @@ function renderTradeBanner(){
       ${canCancel ? `<button class="btn" id="tradeCancelBtn">Cancel</button>` : ""}
       ${canAccept ? `<button class="btn danger" id="tradeDeclineBtn">Decline</button>
       <button class="btn primary" id="tradeAcceptBtn">Accept</button>` :
-      `<span style="font-size:12px;color:var(--muted)">Waiting for ${TEAMS[t.to].name} to respond…</span>`}
+      `<span style="font-size:12px;color:var(--muted)">${waitMsg}</span>`}
     </div>
   </div>`;
   const cancelBtn = document.getElementById("tradeCancelBtn");
@@ -1741,6 +1746,96 @@ function smartAIPick(teamIdx){
   });
   return best;
 }
+// ---- CPU trade evaluation (mock mode only) ----
+function pickValue(p){
+  if(p.kind === "made"){
+    const player = state.picks[p.id];
+    if(!player || player.skipped) return 0;
+    const rank = RANK_MAP[PLAYERS[player.playerIdx][0]] || 250;
+    return Math.max(0, 250 - rank);
+  }
+  // future pick: earlier overall = more valuable
+  return Math.max(0, 250 - p.id);
+}
+function evaluateTrade(t, receivingTeam){
+  // From perspective of receivingTeam (positive = good for them)
+  const receives = (t.from === receivingTeam ? t.toPicks : t.fromPicks)
+    .reduce((s,p) => s + pickValue(p), 0);
+  const sends = (t.from === receivingTeam ? t.fromPicks : t.toPicks)
+    .reduce((s,p) => s + pickValue(p), 0);
+  return receives - sends;
+}
+function buildCounter(t, cpuTeam, humanTeam){
+  // Add 1 pick to each side: cpu adds their lowest-value, asks human to add highest-value
+  const usedFrom = new Set(t.fromPicks.map(p => `${p.kind}|${p.id}`));
+  const usedTo   = new Set(t.toPicks.map(p => `${p.kind}|${p.id}`));
+  const usedHuman = t.from === humanTeam ? usedFrom : usedTo;
+  const usedCpu   = t.from === cpuTeam   ? usedFrom : usedTo;
+  const human = picksOwnedBy(humanTeam);
+  const cpu   = picksOwnedBy(cpuTeam);
+  const humanFree = [...human.made, ...human.future]
+    .filter(p => !usedHuman.has(`${p.kind}|${p.id}`));
+  const cpuFree = [...cpu.made, ...cpu.future]
+    .filter(p => !usedCpu.has(`${p.kind}|${p.id}`));
+  if(!humanFree.length || !cpuFree.length) return null;
+  humanFree.sort((a,b) => pickValue(b) - pickValue(a));
+  cpuFree.sort((a,b) => pickValue(a) - pickValue(b));
+  // CPU becomes proposer; human becomes receiver
+  return {
+    from: cpuTeam, to: humanTeam,
+    fromPicks: [
+      ...(t.from === cpuTeam ? t.fromPicks : t.toPicks),
+      {kind: cpuFree[0].kind, id: cpuFree[0].id},
+    ],
+    toPicks: [
+      ...(t.from === humanTeam ? t.fromPicks : t.toPicks),
+      {kind: humanFree[0].kind, id: humanFree[0].id},
+    ],
+    counter: true,
+    at: Date.now(),
+  };
+}
+
+let lastCpuEvalAt = 0;
+function maybeCpuRespondToTrade(){
+  if(!inMockMode) return;
+  const t = state.pendingTrade;
+  if(!t) return;
+  if(t.counter) return; // already a CPU counter — human must decide
+  const humanTeam = parseInt(role, 10);
+  if(t.to === humanTeam) return; // CPU proposed to human? unusual — skip
+  if(t.to === t.from) return;
+  if(t.at === lastCpuEvalAt) return; // already scheduled this trade
+  lastCpuEvalAt = t.at;
+  const cpuTeam = t.to;
+  setTimeout(() => {
+    if(!state.pendingTrade || state.pendingTrade.at !== lastCpuEvalAt) return;
+    const delta = evaluateTrade(state.pendingTrade, cpuTeam);
+    let decision;
+    if(delta >= 8) decision = "accept";
+    else if(delta >= -5) decision = Math.random() < 0.55 ? "accept" : "counter";
+    else if(delta >= -25) decision = "counter";
+    else decision = "decline";
+
+    if(decision === "accept"){
+      applyPendingTrade();
+    } else if(decision === "counter"){
+      const counter = buildCounter(state.pendingTrade, cpuTeam, humanTeam);
+      if(counter){
+        state.pendingTrade = counter;
+        saveLocal();
+      } else {
+        state.pendingTrade = null;
+        saveLocal();
+      }
+    } else {
+      state.pendingTrade = null;
+      saveLocal();
+    }
+    render();
+  }, 1500 + Math.random() * 800);
+}
+
 let aiTimer = null;
 function scheduleAIPick(){
   if(!inMockMode) return;
