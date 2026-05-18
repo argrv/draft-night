@@ -126,6 +126,49 @@
   .targets-btn{font-size:13px;background:var(--panel2);color:var(--text);
     border:1px solid var(--line);padding:9px 10px;border-radius:10px;cursor:pointer}
   .targets-btn.on{background:#3a2c0a;border-color:var(--accent);color:var(--accent)}
+  /* compact stats under player name */
+  .player .nm{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;overflow:hidden}
+  .player .nm .nm-top{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .player .nm .ministat{font-size:10.5px;color:var(--muted);font-weight:normal;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* history modal */
+  .history-list{max-height:60vh;overflow-y:auto}
+  .h-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .h-row:last-child{border-bottom:0}
+  .h-row .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .h-row .num{font-size:11px;color:var(--muted);min-width:42px}
+  /* mini toolbar buttons */
+  .mini-btn{font-size:13px;background:var(--panel2);color:var(--text);
+    border:1px solid var(--line);padding:8px 10px;border-radius:8px;cursor:pointer}
+  /* recap */
+  .recap{padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-top:12px}
+  .recap h2{margin:0 0 6px;font-size:18px}
+  .recap-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+  @media(min-width:760px){.recap-grid{grid-template-columns:1fr 1fr}}
+  .rteam{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .rteam h3{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:6px}
+  .rteam ol{margin:0;padding-left:22px;font-size:13px;line-height:1.6}
+  /* chat */
+  .chat-fab{position:fixed;right:14px;bottom:14px;width:56px;height:56px;border-radius:50%;
+    background:var(--accent);color:#1a1407;border:0;font-size:24px;cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:40;display:flex;align-items:center;justify-content:center}
+  .chat-fab .badge{position:absolute;top:-2px;right:-2px;background:#ff5959;color:#fff;font-size:11px;
+    border-radius:999px;padding:2px 6px;font-weight:700;min-width:18px}
+  .chat-drawer{position:fixed;right:14px;bottom:80px;width:min(360px, calc(100vw - 28px));
+    max-height:60vh;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    z-index:39;display:none;flex-direction:column;overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .chat-drawer.show{display:flex}
+  .chat-head{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;
+    justify-content:space-between;align-items:center;background:var(--panel2)}
+  .chat-msgs{flex:1;overflow-y:auto;padding:10px 12px;font-size:13px}
+  .chat-msg{margin-bottom:8px;line-height:1.4}
+  .chat-msg .who{font-weight:600;font-size:11px;color:var(--muted);margin-bottom:1px}
+  .chat-input-row{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line);background:var(--panel2)}
+  .chat-input-row input{flex:1}
+  /* mock badge */
+  .mock-pill{background:#3a1a3a;border:1px solid #6a3a6a;color:#ffb3ff;
+    font-size:11px;padding:3px 8px;border-radius:999px}
   .pcard{max-width:480px}
   .pcard .photo{width:100%;background:#0f1320;border-radius:10px;margin-bottom:10px;
     display:flex;align-items:center;justify-content:center;
@@ -165,6 +208,9 @@
       Admin can pick for anyone and control the draft timer.
     </p>
     <div class="role-grid" id="roleGrid"></div>
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+      <button class="btn" id="mockBtn" style="width:100%">🎮 Try a Mock Draft (solo, vs AI)</button>
+    </div>
   </div>
 
   <div id="setupView" class="panel" style="display:none">
@@ -187,10 +233,13 @@
         <span style="margin-left:10px">⏱ <span class="timer" id="timer">5:00</span></span>
       </div>
       <div class="row">
+        <button class="mini-btn" id="historyBtn" title="Pick history">📜</button>
+        <button class="mini-btn" id="exportBtn" title="Export rosters">📋</button>
         <button class="btn" id="undoBtn">Undo</button>
-        <button class="btn danger" id="resetAll">Reset Draft</button>
+        <button class="btn danger" id="resetAll">Reset</button>
       </div>
     </div>
+    <div id="mockBadgeWrap"></div>
     <div class="upcoming" id="upcoming"></div>
     <div id="tradeBannerWrap"></div>
     <div class="expired-banner" id="expiredBanner" style="display:none">
@@ -239,6 +288,19 @@
 
 <div class="modal" id="tradeModal">
   <div class="box" style="max-width:560px" id="tradeModalBox"></div>
+</div>
+
+<button class="chat-fab" id="chatFab" style="display:none">💬<span class="badge" id="chatBadge" style="display:none">0</span></button>
+<div class="chat-drawer" id="chatDrawer">
+  <div class="chat-head">
+    <b>Draft Chat</b>
+    <button class="btn" id="chatClose" style="padding:4px 10px">✕</button>
+  </div>
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <div class="chat-input-row">
+    <input id="chatInput" type="text" placeholder="Type a message…" maxlength="200"/>
+    <button class="btn primary" id="chatSend">Send</button>
+  </div>
 </div>
 
 <div class="modal" id="teamModal">
@@ -405,7 +467,11 @@ const PLAYERS = [
   ["Collin Sexton","PG"],["Kyle Kuzma","PF/SF"],["Cameron Johnson","SF/PF"],
 ];
 
-const STORAGE_KEY = "alltime2k26-draft-v1";
+const STORAGE_KEY_REAL = "alltime2k26-draft-v1";
+const STORAGE_KEY_MOCK = "alltime2k26-mock-v1";
+const MODE_KEY = "alltime2k26-mode";
+let inMockMode = localStorage.getItem(MODE_KEY) === "mock";
+const STORAGE_KEY = inMockMode ? STORAGE_KEY_MOCK : STORAGE_KEY_REAL;
 const ROLE_KEY = "alltime2k26-role-v1";
 const PICK_SECONDS = 300; // 5 minutes
 const ROUNDS = 12;          // roster cap per team
@@ -421,7 +487,9 @@ const DEFAULT_STATE = {
   pickOwner: {},         // {overallPickIdx: teamIdx} — overrides snake order
   pendingTrade: null,    // {from, to, fromPicks:[{kind,id}], toPicks:[...], at}
   targets: {},           // { teamIdxStr: [playerIdx, ...] } — per-team target lists
+  chat: [],              // [{author, teamIdx, msg, at}]
 };
+let lastSeenChatLen = 0;
 let showTargetsOnly = false; // local UI toggle
 
 let state = loadLocal() || {...DEFAULT_STATE};
@@ -505,15 +573,17 @@ function playPickSound(){
   } catch(e){}
 }
 
+function activeStorageKey(){ return inMockMode ? STORAGE_KEY_MOCK : STORAGE_KEY_REAL; }
 function loadLocal(){
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(activeStorageKey())); } catch { return null; }
 }
-function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function saveLocal(){ localStorage.setItem(activeStorageKey(), JSON.stringify(state)); }
 
 // Remote sync: shared state lives in Firestore doc drafts/main.
 // filterPos/search stay local (per-device UI prefs).
 async function save(){
   saveLocal();
+  if(inMockMode) return; // mock is local-only
   try {
     await setDoc(DRAFT_DOC, {
       order: state.order,
@@ -523,12 +593,14 @@ async function save(){
       pickOwner: state.pickOwner || {},
       pendingTrade: state.pendingTrade || null,
       targets: state.targets || {},
+      chat: (state.chat || []).slice(-100),
       updatedAt: Date.now(),
     });
   } catch(e){ console.warn("Firestore write failed:", e); }
 }
 
 onSnapshot(DRAFT_DOC, (snap) => {
+  if(inMockMode) return; // ignore real-draft updates while mocking
   if(!snap.exists()) return;
   const d = snap.data();
   state.order = d.order ?? state.order;
@@ -538,6 +610,7 @@ onSnapshot(DRAFT_DOC, (snap) => {
   state.pickOwner = d.pickOwner ?? state.pickOwner ?? {};
   state.pendingTrade = d.pendingTrade ?? null;
   state.targets = d.targets ?? state.targets ?? {};
+  state.chat = d.chat ?? state.chat ?? [];
   saveLocal();
   render();
 }, (err) => console.warn("Firestore subscribe failed:", err));
@@ -696,6 +769,19 @@ function updateStartBtn(){
 let lastNotifiedPickIdx = -1;
 let firedWarnings = {}; // {pickIdx: {30:true,10:true,0:true}}
 function renderDraft(){
+  // mock badge
+  const mockWrap = document.getElementById("mockBadgeWrap");
+  if(mockWrap){
+    mockWrap.innerHTML = inMockMode
+      ? `<div style="margin-top:8px;text-align:center"><span class="mock-pill">🎮 MOCK DRAFT MODE</span>
+         <button class="btn" id="exitMockBtn" style="margin-left:8px">Exit Mock</button></div>` : "";
+    const eb = document.getElementById("exitMockBtn");
+    if(eb) eb.onclick = exitMock;
+  }
+  // chat FAB
+  chatFab.style.display = role ? "" : "none";
+  updateChatBadge();
+
   const pickIdx = state.picks.length;
   const done = pickIdx >= TOTAL_PICKS;
   const round = Math.floor(pickIdx / 4) + 1;
@@ -786,7 +872,11 @@ function renderDraft(){
     const starHTML = canStar
       ? `<button class="star ${isTargeted(i)?"on":""}" data-star="${i}" title="Add to target list">${isTargeted(i)?"★":"☆"}</button>`
       : "";
-    el.innerHTML = `<span class="nm">${p[0]}</span>${starHTML}<span class="pos">${p[1]}</span>`;
+    const st = STATS[p[0]];
+    const miniStat = st
+      ? `<span class="ministat">${fmtStat(st[1])} / ${fmtStat(st[2])} / ${fmtStat(st[3])}</span>`
+      : "";
+    el.innerHTML = `<span class="nm"><span class="nm-top">${p[0]}</span>${miniStat}</span>${starHTML}<span class="pos">${p[1]}</span>`;
     el.onclick = (e) => {
       if(e.target.dataset.star !== undefined){
         toggleTarget(parseInt(e.target.dataset.star, 10));
@@ -799,6 +889,16 @@ function renderDraft(){
     list.appendChild(el);
     shown++;
   });
+  // when complete, replace the player list area with recap
+  if(done){
+    list.innerHTML = renderRecap();
+    list.style.maxHeight = "none";
+    list.querySelectorAll("[data-recap-player]").forEach(a => {
+      a.onclick = (e) => { e.preventDefault(); openPlayerInfo(parseInt(a.dataset.recapPlayer, 10)); };
+    });
+  } else {
+    list.style.maxHeight = "";
+  }
   let hint = "";
   if(!done){
     if(expired) hint = " · ⏰ paused";
@@ -1086,7 +1186,6 @@ function openConfirmPick(playerIdx, teamIdx){
   `);
   document.getElementById("confirmCancel").onclick = closePlayerModal;
   document.getElementById("confirmOk").onclick = () => {
-    // Commit pick — recheck on-the-clock in case state changed
     const pickIdx = state.picks.length;
     const onClock = teamOnPick(pickIdx);
     if(onClock !== teamIdx){ closePlayerModal(); render(); return; }
@@ -1095,6 +1194,7 @@ function openConfirmPick(playerIdx, teamIdx){
     playPickSound();
     save(); render();
     openPlayerInfo(playerIdx);
+    if(inMockMode) scheduleAIPick();
   };
 }
 
@@ -1359,6 +1459,192 @@ document.getElementById("skipPickBtn").onclick = () => {
   save(); render();
 };
 
+// ---- Pick history ----
+document.getElementById("historyBtn").onclick = () => {
+  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+  const rows = state.picks.map((p,i) => {
+    const rnd = Math.floor(i/4)+1;
+    const label = p.skipped ? "— skipped —"
+      : `<b>${PLAYERS[p.playerIdx][0]}</b> <span style="color:var(--muted)">(${PLAYERS[p.playerIdx][1]})</span>`;
+    return `<div class="h-row">
+      <span class="num">R${rnd}·#${i+1}</span>
+      <span class="dot" style="background:${dots[p.teamIdx]}"></span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${TEAMS[p.teamIdx].name} — ${label}</span>
+    </div>`;
+  }).reverse().join("");
+  showPlayerModal(`<h3>Pick History</h3>
+    <div class="history-list">${rows || `<div class="empty">No picks yet.</div>`}</div>
+    <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>`);
+  document.getElementById("pcardClose").onclick = closePlayerModal;
+};
+
+// ---- Text export ----
+document.getElementById("exportBtn").onclick = async () => {
+  let txt = `ALL-TIME 2K26 DRAFT — ${new Date().toLocaleDateString()}\n\n`;
+  TEAMS.forEach((t, ti) => {
+    txt += `${t.name.toUpperCase()} (${t.owner})\n`;
+    const myPicks = state.picks
+      .map((p,idx) => ({...p, overall: idx+1}))
+      .filter(p => p.teamIdx === ti && !p.skipped);
+    if(myPicks.length === 0) txt += "  (no picks)\n";
+    myPicks.forEach((p,i) => {
+      txt += `  ${i+1}. ${PLAYERS[p.playerIdx][0]} (${PLAYERS[p.playerIdx][1]}) — #${p.overall} overall\n`;
+    });
+    txt += "\n";
+  });
+  try {
+    await navigator.clipboard.writeText(txt);
+    alert("Rosters copied to clipboard!");
+  } catch {
+    showPlayerModal(`<h3>Export</h3>
+      <textarea readonly style="width:100%;height:50vh;background:var(--panel2);color:var(--text);
+        border:1px solid var(--line);border-radius:8px;padding:8px;font-family:monospace;font-size:12px">${txt}</textarea>
+      <div class="row"><button class="btn primary" id="pcardClose">Close</button></div>`);
+    document.getElementById("pcardClose").onclick = closePlayerModal;
+  }
+};
+
+// ---- Draft recap (auto-shown when complete) ----
+function renderRecap(){
+  // shown inside renderDraft when done=true; replaces the available-players panel
+  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+  let html = `<div class="recap"><h2>🏆 Draft Complete</h2>
+    <div style="color:var(--muted);font-size:13px">${new Date().toLocaleDateString()} · Tap a player to see their card.</div>
+    <div class="recap-grid">`;
+  TEAMS.forEach((t,ti) => {
+    const myPicks = state.picks
+      .map((p,idx) => ({...p, overall: idx+1}))
+      .filter(p => p.teamIdx === ti && !p.skipped);
+    html += `<div class="rteam"><h3><span class="dot" style="background:${dots[ti]};
+      width:10px;height:10px;border-radius:50%"></span>${t.name} <span style="color:var(--muted);font-weight:400">— ${t.owner}</span></h3>
+      <ol>${myPicks.map(p =>
+        `<li><a href="#" data-recap-player="${p.playerIdx}" style="color:var(--text);text-decoration:none">${PLAYERS[p.playerIdx][0]}</a> <span style="color:var(--muted);font-size:11px">(${PLAYERS[p.playerIdx][1]})</span></li>`
+      ).join("")}</ol></div>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+// ---- Chat ----
+const chatFab = document.getElementById("chatFab");
+const chatDrawer = document.getElementById("chatDrawer");
+const chatMsgs = document.getElementById("chatMsgs");
+const chatInput = document.getElementById("chatInput");
+const chatBadge = document.getElementById("chatBadge");
+chatFab.onclick = () => {
+  chatDrawer.classList.toggle("show");
+  if(chatDrawer.classList.contains("show")){
+    lastSeenChatLen = (state.chat || []).length;
+    chatBadge.style.display = "none";
+    renderChat();
+    chatInput.focus();
+  }
+};
+document.getElementById("chatClose").onclick = () => chatDrawer.classList.remove("show");
+document.getElementById("chatSend").onclick = sendChat;
+chatInput.addEventListener("keydown", (e) => { if(e.key === "Enter") sendChat(); });
+function sendChat(){
+  const v = chatInput.value.trim();
+  if(!v) return;
+  if(!role){ alert("Pick a role first."); return; }
+  const author = isAdmin() ? "Admin" :
+    `${TEAMS[parseInt(role,10)].owner} (${TEAMS[parseInt(role,10)].name})`;
+  state.chat = state.chat || [];
+  state.chat.push({author, msg: v, at: Date.now(), teamIdx: isAdmin() ? -1 : parseInt(role,10)});
+  state.chat = state.chat.slice(-100);
+  chatInput.value = "";
+  save();
+  renderChat();
+}
+function renderChat(){
+  const msgs = state.chat || [];
+  chatMsgs.innerHTML = msgs.map(m => `
+    <div class="chat-msg">
+      <div class="who">${m.author}</div>
+      <div>${escapeHTML(m.msg)}</div>
+    </div>`).join("") || `<div class="empty">No messages yet. Start the trash talk.</div>`;
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+function escapeHTML(s){ return s.replace(/[<>&"']/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c])); }
+function updateChatBadge(){
+  const msgs = state.chat || [];
+  const unseen = Math.max(0, msgs.length - lastSeenChatLen);
+  if(unseen > 0 && !chatDrawer.classList.contains("show")){
+    chatBadge.textContent = unseen; chatBadge.style.display = "";
+  } else {
+    chatBadge.style.display = "none";
+  }
+}
+
+// ---- Mock draft ----
+document.getElementById("mockBtn").onclick = () => {
+  if(inMockMode){ exitMock(); return; }
+  // Ask which team to be
+  let html = `<h3>Mock Draft (Solo)</h3>
+    <p style="font-size:13px;color:var(--muted)">Pick which team you'll draft for. The other 3 will auto-pick the best available player. Nothing here syncs to the real draft.</p>`;
+  TEAMS.forEach((t,i) => {
+    html += `<button class="team-pick" data-mock="${i}">${t.name} — ${t.owner}</button>`;
+  });
+  html += `<div class="row" style="justify-content:flex-end"><button class="btn" id="mockCancel">Cancel</button></div>`;
+  showPlayerModal(html);
+  document.getElementById("mockCancel").onclick = closePlayerModal;
+  document.querySelectorAll("[data-mock]").forEach(b => {
+    b.onclick = () => { enterMock(parseInt(b.dataset.mock, 10)); closePlayerModal(); };
+  });
+};
+function enterMock(teamIdx){
+  inMockMode = true;
+  localStorage.setItem(MODE_KEY, "mock");
+  role = String(teamIdx);
+  localStorage.setItem(ROLE_KEY, role);
+  // Fresh mock state with random order, started
+  const shuffled = [0,1,2,3].sort(() => Math.random() - 0.5);
+  state = {...DEFAULT_STATE, order: shuffled, started: true, pickStartedAt: Date.now(),
+    pickOwner:{}, pendingTrade:null, targets:{}, chat:[], picks:[]};
+  saveLocal();
+  render();
+  scheduleAIPick();
+}
+function exitMock(){
+  if(!confirm("Exit mock draft? Mock progress will be cleared.")) return;
+  localStorage.removeItem(STORAGE_KEY_MOCK);
+  inMockMode = false;
+  localStorage.setItem(MODE_KEY, "real");
+  state = loadLocal() || {...DEFAULT_STATE};
+  render();
+}
+// Simple ranking by PPG for AI; fallback to PLAYERS list order
+function bestAvailable(){
+  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => p.playerIdx));
+  let best = null, bestScore = -1;
+  PLAYERS.forEach((p,i) => {
+    if(takenIdx.has(i)) return;
+    const st = STATS[p[0]];
+    const score = st ? st[1] + 0.5*st[3] + 0.3*st[2] : (300 - i) * 0.01; // PPG + half APG + 0.3 RPG; fallback to list order
+    if(score > bestScore){ bestScore = score; best = i; }
+  });
+  return best;
+}
+let aiTimer = null;
+function scheduleAIPick(){
+  if(!inMockMode) return;
+  clearTimeout(aiTimer);
+  const pickIdx = state.picks.length;
+  if(pickIdx >= TOTAL_PICKS) return;
+  const onClock = teamOnPick(pickIdx);
+  if(onClock === parseInt(role, 10)) return; // human's turn — wait
+  aiTimer = setTimeout(() => {
+    const idx = bestAvailable();
+    if(idx === null) return;
+    state.picks.push({playerIdx: idx, teamIdx: onClock});
+    state.pickStartedAt = Date.now();
+    playPickSound();
+    saveLocal();
+    render();
+    scheduleAIPick();
+  }, 700);
+}
+
 // Timer tick — re-render once per second to update countdown
 setInterval(() => {
   if(state.started && state.picks.length < TOTAL_PICKS) render();
@@ -1381,6 +1667,9 @@ document.getElementById("posFilter").value = state.filterPos;
 document.getElementById("search").value = state.search;
 
 render();
+renderChat();
+lastSeenChatLen = (state.chat || []).length;
+if(inMockMode) scheduleAIPick();
 </script>
 </body>
 </html>
