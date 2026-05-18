@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>All-Time 2K26 Draft</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141823; --panel2:#1b2030; --line:#2a3142;
+    --text:#e7ecf3; --muted:#8b94a7; --accent:#ffb020; --accent2:#5aa9ff;
+    --t1:#2dbf7a; --t2:#e74c3c; --t3:#9b59b6; --t4:#3498db;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    -webkit-text-size-adjust:100%}
+  header{padding:14px 16px;background:var(--panel);border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:10}
+  header h1{margin:0;font-size:17px;letter-spacing:.3px}
+  header .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .wrap{padding:12px;max-width:1400px;margin:0 auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:9px 12px;border-radius:10px;font-size:13px;cursor:pointer}
+  .btn:active{transform:scale(.98)}
+  .btn.primary{background:var(--accent);color:#1a1407;border-color:var(--accent);font-weight:600}
+  .btn.danger{background:#3a1a1a;border-color:#5a2a2a;color:#ffb3b3}
+  select,input{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    padding:9px 10px;border-radius:10px;font-size:14px}
+  .layout{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+  @media(min-width:900px){.layout{grid-template-columns:1.3fr 1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .panel h2{margin:0 0 8px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+  .status{padding:10px 12px;background:var(--panel2);border-radius:10px;font-size:13px;
+    display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .pick-info b{color:var(--accent)}
+  .players{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;
+    max-height:62vh;overflow:auto;padding-right:4px}
+  .player{display:flex;justify-content:space-between;align-items:center;gap:6px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 10px;font-size:14px;cursor:pointer;transition:background .12s}
+  .player:hover{background:#222a3d}
+  .player .pos{font-size:11px;color:var(--muted);background:#0f1320;
+    padding:2px 6px;border-radius:6px;flex-shrink:0}
+  .player .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .teams{display:grid;grid-template-columns:1fr;gap:8px}
+  @media(min-width:600px){.teams{grid-template-columns:1fr 1fr}}
+  .team{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .team.active{outline:2px solid var(--accent);outline-offset:-2px}
+  .team h3{margin:0 0 6px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .team h3 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+  .team[data-i="0"] h3 .dot{background:var(--t1)}
+  .team[data-i="1"] h3 .dot{background:var(--t2)}
+  .team[data-i="2"] h3 .dot{background:var(--t3)}
+  .team[data-i="3"] h3 .dot{background:var(--t4)}
+  .team ol{margin:0;padding-left:22px;font-size:13px;min-height:30px}
+  .team li{padding:2px 0}
+  .team li small{color:var(--muted);margin-left:4px}
+  .pick-actions{display:flex;gap:6px;margin-top:6px}
+  .order-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+  .order-cell{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px;text-align:center;font-size:13px;cursor:pointer}
+  .order-cell.set{background:#0f1f17;border-color:#1d4730}
+  .order-cell .n{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:14px}
+  .modal.show{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:16px;max-width:420px;width:100%}
+  .modal h3{margin:0 0 10px}
+  .team-pick{display:block;width:100%;text-align:left;background:var(--panel2);
+    border:1px solid var(--line);color:var(--text);padding:10px 12px;
+    border-radius:10px;margin-bottom:6px;cursor:pointer;font-size:14px}
+  .team-pick:disabled{opacity:.3;cursor:not-allowed}
+  .undo-bar{font-size:12px;color:var(--muted);margin-top:6px}
+  .empty{color:var(--muted);font-style:italic;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏀 All-Time 2K26 Snake Draft</h1>
+  <div class="sub" id="subtitle">Loading…</div>
+</header>
+
+<div class="wrap">
+  <div id="setupView" class="panel" style="display:none">
+    <h2>Set First-Round Order</h2>
+    <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
+      Tap each slot to assign a team. Rounds 2–N will snake automatically (1→4, then 4→1, then 1→4…).
+    </p>
+    <div class="order-grid" id="orderGrid"></div>
+    <div class="row">
+      <button class="btn" id="resetOrder">Clear</button>
+      <button class="btn primary" id="startDraft" disabled>Start Draft</button>
+    </div>
+  </div>
+
+  <div id="draftView" style="display:none">
+    <div class="status">
+      <div class="pick-info">
+        Pick <b id="pickNum">1</b> · Round <b id="roundNum">1</b> · On the clock:
+        <b id="onClock">—</b>
+      </div>
+      <div class="row">
+        <button class="btn" id="undoBtn">Undo</button>
+        <button class="btn danger" id="resetAll">Reset Draft</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <h2 style="margin:0">Available Players</h2>
+          <div class="row">
+            <select id="posFilter">
+              <option value="ALL">All Positions</option>
+              <option value="PG">PG</option>
+              <option value="SG">SG</option>
+              <option value="SF">SF</option>
+              <option value="PF">PF</option>
+              <option value="C">C</option>
+            </select>
+            <input id="search" type="search" placeholder="Search…" style="width:130px" />
+          </div>
+        </div>
+        <div class="players" id="players"></div>
+        <div class="undo-bar" id="countLine"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Teams</h2>
+        <div class="teams" id="teams"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="teamModal">
+  <div class="box">
+    <h3 id="modalTitle">Assign Team</h3>
+    <div id="modalTeams"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:6px">
+      <button class="btn" id="modalCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TEAMS = [
+  {name:"Team Coqui",       color:"var(--t1)"},
+  {name:"Clutch City",      color:"var(--t2)"},
+  {name:"Greek Freaks",     color:"var(--t3)"},
+  {name:"Clearwater Comrades", color:"var(--t4)"},
+];
+
+// Top 100 All-Time NBA 2K26 pool (mix of legends + current stars on All-Time rosters).
+// Positions are primary 2K positions.
+const PLAYERS = [
+  ["Michael Jordan","SG"],["LeBron James","SF"],["Kareem Abdul-Jabbar","C"],
+  ["Magic Johnson","PG"],["Larry Bird","SF"],["Bill Russell","C"],
+  ["Wilt Chamberlain","C"],["Shaquille O'Neal","C"],["Tim Duncan","PF"],
+  ["Kobe Bryant","SG"],["Hakeem Olajuwon","C"],["Stephen Curry","PG"],
+  ["Kevin Durant","SF"],["Jerry West","SG"],["Oscar Robertson","PG"],
+  ["Karl Malone","PF"],["Moses Malone","C"],["Julius Erving","SF"],
+  ["David Robinson","C"],["Dirk Nowitzki","PF"],["Kevin Garnett","PF"],
+  ["Giannis Antetokounmpo","PF"],["Nikola Jokic","C"],["Charles Barkley","PF"],
+  ["John Stockton","PG"],["Isiah Thomas","PG"],["Scottie Pippen","SF"],
+  ["Dwyane Wade","SG"],["Allen Iverson","PG"],["Steve Nash","PG"],
+  ["Patrick Ewing","C"],["Jason Kidd","PG"],["Gary Payton","PG"],
+  ["Chris Paul","PG"],["James Harden","SG"],["Russell Westbrook","PG"],
+  ["Dwight Howard","C"],["Paul Pierce","SF"],["Ray Allen","SG"],
+  ["Reggie Miller","SG"],["Clyde Drexler","SG"],["John Havlicek","SF"],
+  ["Elgin Baylor","SF"],["Bob Cousy","PG"],["Pete Maravich","PG"],
+  ["George Mikan","C"],["Rick Barry","SF"],["Dolph Schayes","PF"],
+  ["Willis Reed","C"],["Wes Unseld","C"],["Bob Pettit","PF"],
+  ["Dominique Wilkins","SF"],["George Gervin","SG"],["David Thompson","SG"],
+  ["Connie Hawkins","SF"],["Bill Walton","C"],["Dave Cowens","C"],
+  ["Robert Parish","C"],["James Worthy","SF"],["Kevin McHale","PF"],
+  ["Dennis Rodman","PF"],["Tracy McGrady","SG"],["Vince Carter","SG"],
+  ["Grant Hill","SF"],["Penny Hardaway","PG"],["Chris Webber","PF"],
+  ["Alonzo Mourning","C"],["Yao Ming","C"],["Pau Gasol","PF"],
+  ["Manu Ginobili","SG"],["Tony Parker","PG"],["Carmelo Anthony","SF"],
+  ["Chris Bosh","PF"],["Dikembe Mutombo","C"],["Ben Wallace","C"],
+  ["Rasheed Wallace","PF"],["Shawn Marion","SF"],["Joel Embiid","C"],
+  ["Anthony Davis","PF"],["Damian Lillard","PG"],["Kawhi Leonard","SF"],
+  ["Paul George","SF"],["Jimmy Butler","SF"],["Luka Doncic","PG"],
+  ["Jayson Tatum","SF"],["Devin Booker","SG"],["Donovan Mitchell","SG"],
+  ["Klay Thompson","SG"],["Draymond Green","PF"],["Bradley Beal","SG"],
+  ["Kyrie Irving","PG"],["Blake Griffin","PF"],["LaMarcus Aldridge","PF"],
+  ["Carlos Boozer","PF"],["Bernard King","SF"],["Adrian Dantley","SF"],
+  ["Sidney Moncrief","SG"],["Alex English","SF"],["Walt Frazier","PG"],
+  ["Earl Monroe","PG"],["Nate Archibald","PG"],["Artis Gilmore","C"],
+];
+
+const STORAGE_KEY = "alltime2k26-draft-v1";
+
+let state = load() || {
+  order: [null,null,null,null], // first-round team indexes
+  picks: [],                    // [{playerIdx, teamIdx}]
+  filterPos: "ALL",
+  search: "",
+  started: false,
+};
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function load(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+}
+
+// Snake order generator
+function teamOnPick(pickIdx){
+  // pickIdx 0-based
+  const round = Math.floor(pickIdx / 4); // 0-based
+  const slot = pickIdx % 4;
+  const order = state.order;
+  if(round % 2 === 0) return order[slot];
+  return order[3 - slot];
+}
+
+function render(){
+  if(!state.started){
+    renderSetup();
+    document.getElementById("setupView").style.display = "block";
+    document.getElementById("draftView").style.display = "none";
+    document.getElementById("subtitle").textContent = "Set the first-round order to begin.";
+    return;
+  }
+  document.getElementById("setupView").style.display = "none";
+  document.getElementById("draftView").style.display = "block";
+  renderDraft();
+}
+
+function renderSetup(){
+  const grid = document.getElementById("orderGrid");
+  grid.innerHTML = "";
+  state.order.forEach((tIdx, i) => {
+    const cell = document.createElement("div");
+    cell.className = "order-cell" + (tIdx !== null ? " set" : "");
+    cell.innerHTML = `<span class="n">Pick ${i+1}</span>` +
+      (tIdx !== null ? TEAMS[tIdx].name : "Tap to set");
+    cell.onclick = () => openTeamModal("Pick #" + (i+1), (chosen) => {
+      // ensure unique
+      state.order = state.order.map((v,j) => v === chosen ? null : v);
+      state.order[i] = chosen;
+      save(); renderSetup(); updateStartBtn();
+    });
+    grid.appendChild(cell);
+  });
+  updateStartBtn();
+}
+
+function updateStartBtn(){
+  const filled = state.order.every(v => v !== null);
+  document.getElementById("startDraft").disabled = !filled;
+}
+
+function renderDraft(){
+  const pickIdx = state.picks.length;
+  const totalPicks = PLAYERS.length; // could limit
+  const done = pickIdx >= 4 * 25; // 25 rounds = 100 picks; or stop earlier as desired
+  const round = Math.floor(pickIdx / 4) + 1;
+  const onClock = done ? null : teamOnPick(pickIdx);
+
+  document.getElementById("pickNum").textContent = pickIdx + 1;
+  document.getElementById("roundNum").textContent = round;
+  document.getElementById("onClock").textContent = done ? "Draft complete 🎉" :
+    TEAMS[onClock].name;
+  document.getElementById("subtitle").textContent =
+    `${pickIdx} picks made · ${PLAYERS.length - pickIdx} players remaining`;
+
+  // available players
+  const takenIdx = new Set(state.picks.map(p => p.playerIdx));
+  const list = document.getElementById("players");
+  list.innerHTML = "";
+  const q = state.search.toLowerCase().trim();
+  let shown = 0;
+  PLAYERS.forEach((p,i) => {
+    if(takenIdx.has(i)) return;
+    if(state.filterPos !== "ALL" && p[1] !== state.filterPos) return;
+    if(q && !p[0].toLowerCase().includes(q)) return;
+    const el = document.createElement("div");
+    el.className = "player";
+    el.innerHTML = `<span class="nm">${p[0]}</span><span class="pos">${p[1]}</span>`;
+    el.onclick = () => {
+      if(done) return;
+      state.picks.push({playerIdx:i, teamIdx:onClock});
+      save(); render();
+    };
+    list.appendChild(el);
+    shown++;
+  });
+  document.getElementById("countLine").textContent =
+    `${shown} shown · ${PLAYERS.length - takenIdx.size} available total`;
+
+  // teams
+  const teamsEl = document.getElementById("teams");
+  teamsEl.innerHTML = "";
+  TEAMS.forEach((t,ti) => {
+    const myPicks = state.picks
+      .map((p,idx) => ({...p, overall: idx+1}))
+      .filter(p => p.teamIdx === ti);
+    const div = document.createElement("div");
+    div.className = "team" + (onClock === ti ? " active" : "");
+    div.dataset.i = ti;
+    let inner = `<h3><span><span class="dot"></span>${t.name}</span>
+      <span style="color:var(--muted);font-weight:400">${myPicks.length}</span></h3>`;
+    if(myPicks.length === 0){
+      inner += `<div class="empty">No picks yet</div>`;
+    } else {
+      inner += "<ol>" + myPicks.map(p =>
+        `<li>${PLAYERS[p.playerIdx][0]} <small>(${PLAYERS[p.playerIdx][1]} · #${p.overall})</small></li>`
+      ).join("") + "</ol>";
+    }
+    div.innerHTML = inner;
+    teamsEl.appendChild(div);
+  });
+}
+
+// Modal
+function openTeamModal(title, cb){
+  document.getElementById("modalTitle").textContent = title;
+  const wrap = document.getElementById("modalTeams");
+  wrap.innerHTML = "";
+  TEAMS.forEach((t,i) => {
+    const used = state.order.includes(i);
+    const b = document.createElement("button");
+    b.className = "team-pick";
+    b.textContent = t.name + (used ? "  (currently assigned — will move)" : "");
+    b.onclick = () => { closeModal(); cb(i); };
+    wrap.appendChild(b);
+  });
+  document.getElementById("teamModal").classList.add("show");
+}
+function closeModal(){ document.getElementById("teamModal").classList.remove("show"); }
+document.getElementById("modalCancel").onclick = closeModal;
+document.getElementById("teamModal").onclick = (e) => {
+  if(e.target.id === "teamModal") closeModal();
+};
+
+// Wire up
+document.getElementById("resetOrder").onclick = () => {
+  state.order = [null,null,null,null]; save(); renderSetup();
+};
+document.getElementById("startDraft").onclick = () => {
+  state.started = true; save(); render();
+};
+document.getElementById("undoBtn").onclick = () => {
+  if(state.picks.length === 0) return;
+  state.picks.pop(); save(); render();
+};
+document.getElementById("resetAll").onclick = () => {
+  if(!confirm("Reset the entire draft? This clears picks and order.")) return;
+  state = {order:[null,null,null,null], picks:[], filterPos:"ALL", search:"", started:false};
+  save(); render();
+};
+document.getElementById("posFilter").onchange = (e) => {
+  state.filterPos = e.target.value; save(); renderDraft();
+};
+document.getElementById("search").oninput = (e) => {
+  state.search = e.target.value; renderDraft();
+};
+
+// Restore filter UI from state
+document.getElementById("posFilter").value = state.filterPos;
+document.getElementById("search").value = state.search;
+
+render();
+</script>
+</body>
+</html>
