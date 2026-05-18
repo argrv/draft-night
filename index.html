@@ -76,15 +76,48 @@
   .team-pick:disabled{opacity:.3;cursor:not-allowed}
   .undo-bar{font-size:12px;color:var(--muted);margin-top:6px}
   .empty{color:var(--muted);font-style:italic;font-size:13px}
+  .role-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+  @media(min-width:500px){.role-grid{grid-template-columns:1fr 1fr}}
+  .role-btn{padding:18px;border-radius:12px;font-size:16px;font-weight:600;
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);cursor:pointer;
+    display:flex;align-items:center;gap:10px;justify-content:center}
+  .role-btn .rdot{width:12px;height:12px;border-radius:50%}
+  .role-btn[data-r="admin"]{background:#3a2c0a;border-color:#5a4410}
+  .role-tag{font-size:11px;background:#0f1320;color:var(--muted);padding:3px 8px;
+    border-radius:999px;border:1px solid var(--line);cursor:pointer}
+  .role-tag b{color:var(--text)}
+  .timer{font-variant-numeric:tabular-nums;font-weight:600}
+  .timer.warn{color:#ffb020}
+  .timer.expired{color:#ff5959}
+  .expired-banner{background:#3a1a1a;border:1px solid #5a2a2a;border-radius:10px;
+    padding:12px;margin-top:8px;text-align:center}
+  .expired-banner b{color:#ffb3b3}
+  .player.locked{opacity:.55;cursor:not-allowed}
+  .player.locked:hover{background:var(--panel2)}
+  .skipped{color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
 <header>
-  <h1>🏀 All-Time 2K26 Snake Draft</h1>
-  <div class="sub" id="subtitle">Loading…</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div>
+      <h1>🏀 All-Time 2K26 Snake Draft</h1>
+      <div class="sub" id="subtitle">Loading…</div>
+    </div>
+    <div id="roleTag" class="role-tag" style="display:none"></div>
+  </div>
 </header>
 
 <div class="wrap">
+  <div id="homeView" class="panel" style="display:none">
+    <h2>Who are you?</h2>
+    <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
+      Pick your role. You'll only be able to make selections for your team.
+      Admin can pick for anyone and control the draft timer.
+    </p>
+    <div class="role-grid" id="roleGrid"></div>
+  </div>
+
   <div id="setupView" class="panel" style="display:none">
     <h2>Set First-Round Order</h2>
     <p style="font-size:13px;color:var(--muted);margin:4px 0 6px">
@@ -102,10 +135,21 @@
       <div class="pick-info">
         Pick <b id="pickNum">1</b> · Round <b id="roundNum">1</b> · On the clock:
         <b id="onClock">—</b>
+        <span style="margin-left:10px">⏱ <span class="timer" id="timer">5:00</span></span>
       </div>
       <div class="row">
         <button class="btn" id="undoBtn">Undo</button>
         <button class="btn danger" id="resetAll">Reset Draft</button>
+      </div>
+    </div>
+    <div class="expired-banner" id="expiredBanner" style="display:none">
+      <b>⏰ Time expired</b> for <span id="expiredTeam"></span>.
+      <div class="row" style="justify-content:center;margin-top:8px" id="adminTimerActions">
+        <button class="btn" id="addMinBtn">+1 Minute</button>
+        <button class="btn danger" id="skipPickBtn">Skip Pick</button>
+      </div>
+      <div id="waitingForAdmin" style="font-size:12px;color:var(--muted);margin-top:6px;display:none">
+        Waiting for admin to add time or skip…
       </div>
     </div>
 
@@ -302,17 +346,20 @@ const PLAYERS = [
 ];
 
 const STORAGE_KEY = "alltime2k26-draft-v1";
+const ROLE_KEY = "alltime2k26-role-v1";
+const PICK_SECONDS = 300; // 5 minutes
 
 const DEFAULT_STATE = {
   order: [null,null,null,null],
-  picks: [],
+  picks: [],             // [{playerIdx, teamIdx}] or {teamIdx, skipped:true}
   filterPos: "ALL",
   search: "",
   started: false,
+  pickStartedAt: 0,      // ms timestamp (shared)
 };
 
 let state = loadLocal() || {...DEFAULT_STATE};
-let suppressNextLocalSave = false;
+let role = localStorage.getItem(ROLE_KEY); // "admin" | "0".."3" | null
 
 let audioCtx;
 function playPickSound(){
@@ -349,6 +396,7 @@ async function save(){
       order: state.order,
       picks: state.picks,
       started: state.started,
+      pickStartedAt: state.pickStartedAt || 0,
       updatedAt: Date.now(),
     });
   } catch(e){ console.warn("Firestore write failed:", e); }
@@ -357,13 +405,31 @@ async function save(){
 onSnapshot(DRAFT_DOC, (snap) => {
   if(!snap.exists()) return;
   const d = snap.data();
-  // Merge remote shared fields; keep local UI prefs.
   state.order = d.order ?? state.order;
   state.picks = d.picks ?? state.picks;
   state.started = d.started ?? state.started;
+  state.pickStartedAt = d.pickStartedAt ?? state.pickStartedAt;
   saveLocal();
   render();
 }, (err) => console.warn("Firestore subscribe failed:", err));
+
+function isAdmin(){ return role === "admin"; }
+function myTeamIdx(){
+  if(role === null || role === "admin") return null;
+  return parseInt(role, 10);
+}
+function canPickFor(teamIdx){
+  return isAdmin() || myTeamIdx() === teamIdx;
+}
+function remainingSeconds(){
+  if(!state.pickStartedAt) return PICK_SECONDS;
+  return PICK_SECONDS - Math.floor((Date.now() - state.pickStartedAt) / 1000);
+}
+function fmtTime(s){
+  if(s < 0) s = 0;
+  const m = Math.floor(s/60), ss = s%60;
+  return `${m}:${ss.toString().padStart(2,"0")}`;
+}
 
 // Snake order generator
 function teamOnPick(pickIdx){
@@ -376,34 +442,80 @@ function teamOnPick(pickIdx){
 }
 
 function render(){
-  if(!state.started){
-    renderSetup();
-    document.getElementById("setupView").style.display = "block";
-    document.getElementById("draftView").style.display = "none";
-    document.getElementById("subtitle").textContent = "Set the first-round order to begin.";
+  renderRoleTag();
+  const home = document.getElementById("homeView");
+  const setup = document.getElementById("setupView");
+  const draft = document.getElementById("draftView");
+  if(!role){
+    renderHome();
+    home.style.display = "block"; setup.style.display = "none"; draft.style.display = "none";
+    document.getElementById("subtitle").textContent = "Choose your role to continue.";
     return;
   }
-  document.getElementById("setupView").style.display = "none";
-  document.getElementById("draftView").style.display = "block";
+  if(!state.started){
+    renderSetup();
+    home.style.display = "none"; setup.style.display = "block"; draft.style.display = "none";
+    document.getElementById("subtitle").textContent = isAdmin()
+      ? "Set the first-round order to begin."
+      : "Waiting for admin to start the draft…";
+    return;
+  }
+  home.style.display = "none"; setup.style.display = "none"; draft.style.display = "block";
   renderDraft();
+}
+
+function renderRoleTag(){
+  const el = document.getElementById("roleTag");
+  if(!role){ el.style.display = "none"; return; }
+  el.style.display = "inline-block";
+  const label = isAdmin() ? "Admin" : TEAMS[parseInt(role,10)].name;
+  el.innerHTML = `You: <b>${label}</b> · change`;
+  el.onclick = () => {
+    if(!confirm("Switch role? Your draft progress is safe.")) return;
+    role = null; localStorage.removeItem(ROLE_KEY); render();
+  };
+}
+
+function renderHome(){
+  const grid = document.getElementById("roleGrid");
+  grid.innerHTML = "";
+  const dots = ["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
+  TEAMS.forEach((t,i) => {
+    const b = document.createElement("button");
+    b.className = "role-btn"; b.dataset.r = i;
+    b.innerHTML = `<span class="rdot" style="background:${dots[i]}"></span>${t.name}`;
+    b.onclick = () => { role = String(i); localStorage.setItem(ROLE_KEY, role); render(); };
+    grid.appendChild(b);
+  });
+  const a = document.createElement("button");
+  a.className = "role-btn"; a.dataset.r = "admin";
+  a.innerHTML = `🛡️ Admin (can pick for anyone)`;
+  a.onclick = () => { role = "admin"; localStorage.setItem(ROLE_KEY, role); render(); };
+  grid.appendChild(a);
 }
 
 function renderSetup(){
   const grid = document.getElementById("orderGrid");
   grid.innerHTML = "";
+  const admin = isAdmin();
   state.order.forEach((tIdx, i) => {
     const cell = document.createElement("div");
     cell.className = "order-cell" + (tIdx !== null ? " set" : "");
+    cell.style.cursor = admin ? "pointer" : "default";
+    cell.style.opacity = admin ? "1" : ".75";
     cell.innerHTML = `<span class="n">Pick ${i+1}</span>` +
-      (tIdx !== null ? TEAMS[tIdx].name : "Tap to set");
-    cell.onclick = () => openTeamModal("Pick #" + (i+1), (chosen) => {
-      // ensure unique
-      state.order = state.order.map((v,j) => v === chosen ? null : v);
-      state.order[i] = chosen;
-      save(); renderSetup(); updateStartBtn();
-    });
+      (tIdx !== null ? TEAMS[tIdx].name : (admin ? "Tap to set" : "—"));
+    if(admin){
+      cell.onclick = () => openTeamModal("Pick #" + (i+1), (chosen) => {
+        state.order = state.order.map((v,j) => v === chosen ? null : v);
+        state.order[i] = chosen;
+        save(); renderSetup(); updateStartBtn();
+      });
+    }
     grid.appendChild(cell);
   });
+  document.getElementById("resetOrder").style.display = admin ? "" : "none";
+  document.getElementById("startDraft").style.display = admin ? "" : "none";
   updateStartBtn();
 }
 
@@ -414,10 +526,11 @@ function updateStartBtn(){
 
 function renderDraft(){
   const pickIdx = state.picks.length;
-  const totalPicks = PLAYERS.length; // could limit
-  const done = pickIdx >= 4 * 25; // 25 rounds = 100 picks; or stop earlier as desired
+  const done = pickIdx >= 4 * 25;
   const round = Math.floor(pickIdx / 4) + 1;
   const onClock = done ? null : teamOnPick(pickIdx);
+  const rem = remainingSeconds();
+  const expired = !done && rem <= 0;
 
   document.getElementById("pickNum").textContent = pickIdx + 1;
   document.getElementById("roundNum").textContent = round;
@@ -426,30 +539,56 @@ function renderDraft(){
   document.getElementById("subtitle").textContent =
     `${pickIdx} picks made · ${PLAYERS.length - pickIdx} players remaining`;
 
+  // timer
+  const timerEl = document.getElementById("timer");
+  if(done){ timerEl.textContent = "—"; timerEl.className = "timer"; }
+  else {
+    timerEl.textContent = fmtTime(rem);
+    timerEl.className = "timer" + (rem <= 0 ? " expired" : rem <= 60 ? " warn" : "");
+  }
+
+  // expired banner
+  const banner = document.getElementById("expiredBanner");
+  if(expired){
+    banner.style.display = "block";
+    document.getElementById("expiredTeam").textContent = TEAMS[onClock].name;
+    document.getElementById("adminTimerActions").style.display = isAdmin() ? "flex" : "none";
+    document.getElementById("waitingForAdmin").style.display = isAdmin() ? "none" : "block";
+  } else {
+    banner.style.display = "none";
+  }
+
   // available players
-  const takenIdx = new Set(state.picks.map(p => p.playerIdx));
+  const takenIdx = new Set(state.picks.filter(p => !p.skipped).map(p => p.playerIdx));
   const list = document.getElementById("players");
   list.innerHTML = "";
   const q = state.search.toLowerCase().trim();
+  const canIPick = !done && !expired && canPickFor(onClock);
   let shown = 0;
   PLAYERS.forEach((p,i) => {
     if(takenIdx.has(i)) return;
     if(state.filterPos !== "ALL" && !p[1].split("/").includes(state.filterPos)) return;
     if(q && !p[0].toLowerCase().includes(q)) return;
     const el = document.createElement("div");
-    el.className = "player";
+    el.className = "player" + (canIPick ? "" : " locked");
     el.innerHTML = `<span class="nm">${p[0]}</span><span class="pos">${p[1]}</span>`;
     el.onclick = () => {
-      if(done) return;
+      if(!canIPick) return;
       state.picks.push({playerIdx:i, teamIdx:onClock});
+      state.pickStartedAt = Date.now();
       playPickSound();
       save(); render();
     };
     list.appendChild(el);
     shown++;
   });
+  let hint = "";
+  if(!done){
+    if(expired) hint = " · ⏰ paused";
+    else if(!canPickFor(onClock)) hint = ` · 🔒 only ${TEAMS[onClock].name} or admin can pick`;
+  }
   document.getElementById("countLine").textContent =
-    `${shown} shown · ${PLAYERS.length - takenIdx.size} available total`;
+    `${shown} shown · ${PLAYERS.length - takenIdx.size} available total${hint}`;
 
   // teams
   const teamsEl = document.getElementById("teams");
@@ -462,12 +601,14 @@ function renderDraft(){
     div.className = "team" + (onClock === ti ? " active" : "");
     div.dataset.i = ti;
     let inner = `<h3><span><span class="dot"></span>${t.name}</span>
-      <span style="color:var(--muted);font-weight:400">${myPicks.length}</span></h3>`;
+      <span style="color:var(--muted);font-weight:400">${myPicks.filter(p=>!p.skipped).length}</span></h3>`;
     if(myPicks.length === 0){
       inner += `<div class="empty">No picks yet</div>`;
     } else {
       inner += "<ol>" + myPicks.map(p =>
-        `<li>${PLAYERS[p.playerIdx][0]} <small>(${PLAYERS[p.playerIdx][1]} · #${p.overall})</small></li>`
+        p.skipped
+          ? `<li class="skipped">— skipped — <small>(#${p.overall})</small></li>`
+          : `<li>${PLAYERS[p.playerIdx][0]} <small>(${PLAYERS[p.playerIdx][1]} · #${p.overall})</small></li>`
       ).join("") + "</ol>";
     }
     div.innerHTML = inner;
@@ -501,17 +642,44 @@ document.getElementById("resetOrder").onclick = () => {
   state.order = [null,null,null,null]; save(); renderSetup();
 };
 document.getElementById("startDraft").onclick = () => {
-  state.started = true; save(); render();
-};
-document.getElementById("undoBtn").onclick = () => {
-  if(state.picks.length === 0) return;
-  state.picks.pop(); save(); render();
-};
-document.getElementById("resetAll").onclick = () => {
-  if(!confirm("Reset the entire draft? This clears picks and order.")) return;
-  state = {order:[null,null,null,null], picks:[], filterPos:"ALL", search:"", started:false};
+  if(!isAdmin()){ alert("Only admin can start the draft."); return; }
+  state.started = true;
+  state.pickStartedAt = Date.now();
   save(); render();
 };
+document.getElementById("undoBtn").onclick = () => {
+  if(!isAdmin()){ alert("Only admin can undo."); return; }
+  if(state.picks.length === 0) return;
+  state.picks.pop();
+  state.pickStartedAt = Date.now();
+  save(); render();
+};
+document.getElementById("resetAll").onclick = () => {
+  if(!isAdmin()){ alert("Only admin can reset."); return; }
+  if(!confirm("Reset the entire draft? This clears picks and order.")) return;
+  state = {...DEFAULT_STATE, filterPos: state.filterPos, search: state.search};
+  save(); render();
+};
+document.getElementById("addMinBtn").onclick = () => {
+  if(!isAdmin()) return;
+  // Give 60s from now
+  state.pickStartedAt = Date.now() - (PICK_SECONDS - 60) * 1000;
+  save(); render();
+};
+document.getElementById("skipPickBtn").onclick = () => {
+  if(!isAdmin()) return;
+  const pickIdx = state.picks.length;
+  const onClock = teamOnPick(pickIdx);
+  if(!confirm(`Skip ${TEAMS[onClock].name}'s pick? They get no player this round.`)) return;
+  state.picks.push({teamIdx: onClock, skipped: true});
+  state.pickStartedAt = Date.now();
+  save(); render();
+};
+
+// Timer tick — re-render once per second to update countdown
+setInterval(() => {
+  if(state.started && state.picks.length < 4*25) render();
+}, 1000);
 document.getElementById("posFilter").onchange = (e) => {
   state.filterPos = e.target.value; save(); renderDraft();
 };
