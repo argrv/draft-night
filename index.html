@@ -289,6 +289,12 @@
           <div class="row">
             <button class="mode-btn" id="statsModeBtn" title="Toggle career / peak-season stats">📊 Career</button>
             <button class="targets-btn" id="targetsBtn" title="Show only my target list">⭐</button>
+            <select id="sortBy" title="Sort the player board">
+              <option value="default">Default</option>
+              <option value="ppg">PPG</option>
+              <option value="rpg">RPG</option>
+              <option value="apg">APG</option>
+            </select>
             <select id="posFilter">
               <option value="ALL">All Positions</option>
               <option value="PG">PG</option>
@@ -525,6 +531,7 @@ const DEFAULT_STATE = {
   filterPos: "ALL",
   search: "",
   statsMode: "career",
+  sortBy: "default",
   started: false,
   pickStartedAt: 0,      // ms timestamp (shared)
   pickOwner: {},         // {overallPickIdx: teamIdx} — overrides snake order
@@ -984,21 +991,22 @@ function renderDraft(){
   const sm = state.statsMode || "career";
   sModeBtn.textContent = sm === "peak" ? "🌟 Peak" : "📊 Career";
   sModeBtn.classList.toggle("peak", sm === "peak");
-  // Sort by current statsMode's PPG descending, so the board doesn't telegraph our internal rank.
-  const sortPPG = (p) => {
-    const mode = state.statsMode || "career";
-    if(mode === "peak"){
-      const bs = BEST_SEASON[p[0]];
-      if(bs && bs[1] != null) return bs[1];
-    }
+  // Sort: "default" uses my curated rank; PPG/RPG/APG sort by that stat (career or peak per toggle).
+  const sortBy = state.sortBy || "default";
+  const mode = state.statsMode || "career";
+  const statIdx = sortBy === "ppg" ? 1 : sortBy === "rpg" ? 2 : sortBy === "apg" ? 3 : null;
+  const sortVal = (p) => {
+    if(sortBy === "default") return -(RANK_MAP[p[0]] || 999); // higher = better; unranked sinks
+    const src = mode === "peak" ? BEST_SEASON[p[0]] : null;
+    if(src && src[statIdx] != null) return src[statIdx];
     const st = STATS[p[0]];
-    if(st && st[1] != null) return st[1];
+    if(st && st[statIdx] != null) return st[statIdx];
     return -1;
   };
   const playersSorted = PLAYERS
     .map((p, i) => ({p, i}))
     .filter(({p}) => !takenIdx.has(p[0]))
-    .sort((a, b) => sortPPG(b.p) - sortPPG(a.p));
+    .sort((a, b) => sortVal(b.p) - sortVal(a.p));
   playersSorted.forEach(({p, i}) => {
     if(state.filterPos !== "ALL" && !p[1].split("/").includes(state.filterPos)) return;
     if(q && !p[0].toLowerCase().includes(q)) return;
@@ -2608,6 +2616,9 @@ setInterval(() => {
 document.getElementById("posFilter").onchange = (e) => {
   state.filterPos = e.target.value; save(); renderDraft();
 };
+document.getElementById("sortBy").onchange = (e) => {
+  state.sortBy = e.target.value; saveLocal(); renderDraft();
+};
 document.getElementById("statsModeBtn").onclick = () => {
   state.statsMode = (state.statsMode === "peak") ? "career" : "peak";
   saveLocal();
@@ -2625,6 +2636,7 @@ document.getElementById("search").oninput = (e) => {
 
 // Restore filter UI from state
 document.getElementById("posFilter").value = state.filterPos;
+document.getElementById("sortBy").value = state.sortBy || "default";
 document.getElementById("search").value = state.search;
 
 render();
